@@ -4,18 +4,17 @@ expression: text
 ---
   Settings · saves automatically
   [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
-  Tab / Shift+Tab section · ↑ / ↓ move · enter open · esc back · pgup / pgdn details
 
-    Decorative effects       On               Theme
-    Animations               On               Applies immediately
-  › Theme                    Automatic
-    Terminal pet             None             Open the picker to see and preview choices.
-    Pet position             Composer
-                                              Choose a syntax-highlighting theme with a live
-                                              preview. Custom themes can also be installed in your
-                                              Codex themes directory.
+    Decorative effects  On
+    Animations          On
+  › Theme               Automatic
+    Terminal pet        None
+    Pet position        Composer
 
+  Theme · Applies immediately
 
+  Choose a syntax-highlighting theme with a live preview. Custom themes can also
+  be installed in your Codex themes directory.
 
 
 
@@ -23,3 +22,5 @@ expression: text
 
 
   Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · enter open · esc back · pgup / pgdn details

@@ -68,6 +68,21 @@ fn settings_page_sections_and_contextual_help() {
             /*height*/ 25,
         );
     }
+    view.handle_key_event(KeyEvent::from(KeyCode::Tab));
+    view.handle_key_event(KeyEvent::from(KeyCode::Tab));
+    view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    snapshot(
+        &view,
+        "settings_notification_delivery",
+        /*width*/ 110,
+        /*height*/ 20,
+    );
+    snapshot(
+        &view,
+        "settings_notification_delivery_short",
+        /*width*/ 40,
+        /*height*/ 18,
+    );
     assert!(events.try_recv().is_err());
 }
 

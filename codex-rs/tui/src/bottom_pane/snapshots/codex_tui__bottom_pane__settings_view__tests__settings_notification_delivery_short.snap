@@ -1,0 +1,22 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings · saves automatically
+  Notifications (3/6)
+
+  › Delivery        ‹ Automatic ›
+
+  Delivery · Applies immediately
+
+  Automatic chooses an appropriate
+  terminal notification backend.
+  Desktop uses OSC 9 when supported;
+  Bell uses the terminal bell,
+  whose sound or visual behavior is
+  controlled by your terminal.
+  Changes save to your user
+  preferences.
+  Tab / Shift+Tab section · ↑ / ↓ move
+  · ← / → change · esc back · r reset
+  · pgup / pgdn details

@@ -5,20 +5,14 @@ expression: text
   Settings · saves automatically
   [Appearance]  Input & copying  Notifications
   Conversation  Sessions  Advanced
-  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change ·
-  esc back · r reset · pgup / pgdn details
 
-  › Decorative effects       On
-    Animations               On
-    Theme                    Automatic
-    Terminal pet             None
-    Pet position             Composer
+  › Decorative effects  ‹ On ›
+    Animations          On
+    Theme               Automatic
+    Terminal pet        None
+    Pet position        Composer
 
-  Decorative effects
-  Applies immediately
-
-    ● On
-    ○ Off
+  Decorative effects · Applies immediately
 
   Adds fading stars to the composer when using Astra.
   Turn off if the repeated terminal redraws disrupt text
@@ -28,4 +22,11 @@ expression: text
 
 
 
+
+
+
+
   Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change ·
+  esc back · r reset · pgup / pgdn details

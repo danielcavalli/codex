@@ -4,17 +4,16 @@ expression: text
 ---
   Settings · saves automatically
   Appearance  Input & copying  Notifications  Conversation  [Sessions]  Advanced
-  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details
 
-  › Session picker layout    Default          Session picker layout
-    Resume directory         Ask              Applies to the next session
+  › Session picker layout  ‹ Default ›
+    Resume directory       Ask
 
-                                                ○ Dense
-                                                ○ Comfortable
+  Session picker layout · Applies to the next session
 
-                                              Dense fits more saved sessions on screen.
-                                              Comfortable provides more space between session
-                                              results.
+  Dense fits more saved sessions on screen. Comfortable provides more space
+  between session results.
+
+
 
 
 
@@ -26,3 +25,5 @@ expression: text
 
 
   Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details

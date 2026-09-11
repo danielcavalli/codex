@@ -4,16 +4,17 @@ expression: text
 ---
   Settings · saves automatically
   Appearance (1/6)
+
+  › Decorative effects  ‹ On ›
+
+  Decorative effects · Applies
+  immediately
+
+  Adds fading stars to the composer
+  when using Astra. Turn off if the
+  repeated terminal redraws disrupt
+  Saving Decorative effects…
+
   Tab / Shift+Tab section · ↑ / ↓ move
   · ← / → change · esc back · r reset
   · pgup / pgdn details
-
-  › Decorative effects       On
-    Animations               On
-  Decorative effects
-  Applies immediately
-
-    ● On
-    ○ Off
-
-  Saving Decorative effects…

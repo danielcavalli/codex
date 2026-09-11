@@ -1,4 +1,4 @@
-//! A sectioned preference page with visible choices, explanations, and terminal capability feedback.
+//! A sectioned preference page with inline values, explanations, and terminal capability feedback.
 //! Up/Down navigates preferences across sections; Left/Right changes and saves a value in place.
 //! Enter opens specialized pickers, and Escape closes the page.
 
@@ -108,45 +108,28 @@ impl SettingsView {
 
     fn detail_lines(&self, width: u16) -> Vec<Line<'static>> {
         let setting = &SETTINGS[self.indices()[self.row]];
-        let mut lines = vec![
-            setting.label.bold().into(),
-            setting.timing_label().dim().into(),
-            "".into(),
-        ];
-        if let Some(reason) = setting.unavailable_reason(self.pet_support) {
-            lines[1] = "Unavailable in this terminal".dim().into();
-            lines.extend(
-                textwrap::wrap(reason, usize::from(width.max(1)))
-                    .into_iter()
-                    .map(|line| Line::from(line.into_owned())),
-            );
-            return lines;
-        }
-        let settings = self.settings.borrow();
-        match setting.control {
-            Control::Picker(_) => lines.push("Open the picker to see and preview choices.".into()),
-            Control::Toggle | Control::Choices(_) => {
-                let value = setting.value(&settings);
-                for (label, json) in setting.choices() {
-                    let current = serde_json::from_str::<serde_json::Value>(json)
-                        .ok()
-                        .as_ref()
-                        == Some(&value);
-                    let mark = if current { "●" } else { "○" };
-                    let line = format!("  {mark} {label}");
-                    lines.push(if current {
-                        line.cyan().bold().into()
-                    } else {
-                        line.into()
-                    });
-                }
-            }
-        }
+        let unavailable = setting.unavailable_reason(self.pet_support);
+        let heading = Line::from(vec![
+            setting.label.bold(),
+            " · ".dim(),
+            if unavailable.is_some() {
+                "Unavailable in this terminal".dim()
+            } else {
+                setting.timing_label().dim()
+            },
+        ]);
+        let mut lines: Vec<_> = super::selection_popup_common::wrap_styled_line(&heading, width)
+            .into_iter()
+            .map(super::selection_row_layout::line_to_owned)
+            .collect();
         lines.push("".into());
         lines.extend(
-            textwrap::wrap(setting.explanation, usize::from(width.max(1)))
-                .into_iter()
-                .map(|line| Line::from(line.into_owned())),
+            textwrap::wrap(
+                unavailable.unwrap_or(setting.explanation),
+                usize::from(width.max(1)),
+            )
+            .into_iter()
+            .map(|line| Line::from(line.into_owned())),
         );
         lines
     }
@@ -374,38 +357,45 @@ impl Renderable for SettingsView {
                 .map(|line| Line::from(line.into_owned().cyan())),
         );
         let navigation = self.navigation();
-        header.extend(super::selection_popup_common::wrap_styled_line(
-            &navigation,
-            width,
-        ));
-        let [header_area, body, status] = Layout::vertical([
+        let navigation_lines = super::selection_popup_common::wrap_styled_line(&navigation, width);
+        let [header_area, body, status, footer] = Layout::vertical([
             Constraint::Length(header.len() as u16 + 1),
             Constraint::Fill(1),
             Constraint::Length(2),
+            Constraint::Length(navigation_lines.len() as u16),
         ])
         .areas(area.inner(ratatui::layout::Margin::new(
             /*horizontal*/ 2, /*vertical*/ 0,
         )));
         Paragraph::new(header).render(header_area, buf);
         let indices = self.indices();
-        let [fields, detail] = if body.width >= 90 {
-            Layout::horizontal([Constraint::Length(44), Constraint::Fill(1)]).areas(body)
-        } else {
-            Layout::vertical([
-                Constraint::Length(if compact {
-                    2.min(body.height / 2)
-                } else {
-                    (indices.len() as u16 + 1).min(body.height / 2)
-                }),
-                Constraint::Fill(1),
-            ])
-            .areas(body)
+        let [fields, detail] = Layout::vertical([
+            Constraint::Length(if compact {
+                2.min(body.height / 2)
+            } else {
+                (indices.len() as u16 + 1).min(body.height / 2)
+            }),
+            Constraint::Fill(1),
+        ])
+        .areas(body);
+        let fields = Rect {
+            height: fields.height.saturating_sub(1),
+            ..fields
+        };
+        let detail = Rect {
+            width: detail.width.min(80),
+            ..detail
         };
         let start = self
             .row
             .saturating_add(1)
             .saturating_sub(usize::from(fields.height));
         let settings = self.settings.borrow();
+        let label_width = indices
+            .iter()
+            .map(|index| SETTINGS[*index].label.len())
+            .max()
+            .unwrap_or(0);
         let rows: Vec<Line<'static>> = indices
             .iter()
             .enumerate()
@@ -419,7 +409,12 @@ impl Renderable for SettingsView {
                 } else {
                     setting.value_label(&settings)
                 };
-                let label = format!("{prefix} {:<24} {value}", setting.label);
+                let value = if row == self.row && !unavailable && !setting.choices().is_empty() {
+                    format!("‹ {value} ›")
+                } else {
+                    value
+                };
+                let label = format!("{prefix} {:<label_width$}  {value}", setting.label);
                 if unavailable {
                     label.dim().into()
                 } else if row == self.row {
@@ -442,19 +437,17 @@ impl Renderable for SettingsView {
             .map(|line| Line::from(line.into_owned().dim()))
             .collect::<Vec<_>>();
         Paragraph::new(status_lines).render(status, buf);
+        Paragraph::new(navigation_lines).render(footer, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
         let width = width.min(114).saturating_sub(4).max(1);
-        let details_width = if width >= 90 { width - 44 } else { width };
+        let details_width = width.min(80);
         let detail_height = self.detail_lines(details_width).len() as u16;
         let navigation_height =
             super::selection_popup_common::wrap_styled_line(&self.navigation(), width).len() as u16;
-        if width >= 90 {
-            detail_height.max(self.indices().len() as u16) + navigation_height + 6
-        } else {
-            detail_height + self.indices().len() as u16 + navigation_height + 10
-        }
+        let tabs_height = textwrap::wrap(&SECTIONS.join("  "), usize::from(width)).len() as u16;
+        detail_height + self.indices().len() as u16 + navigation_height + tabs_height + 6
     }
 }
 

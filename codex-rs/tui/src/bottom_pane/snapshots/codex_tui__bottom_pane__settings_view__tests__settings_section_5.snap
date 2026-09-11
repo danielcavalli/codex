@@ -4,19 +4,18 @@ expression: text
 ---
   Settings · saves automatically
   Appearance  Input & copying  Notifications  Conversation  Sessions  [Advanced]
-  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details
 
-  › Terminal screen buffer   Automatic        Terminal screen buffer
-    Resize history           Automatic        Applies after restarting Codex
-    Server version notice    On
-                                                ● Automatic
-                                                ○ Always alternate
-                                                ○ Never alternate
+  › Terminal screen buffer  ‹ Automatic ›
+    Resize history          Automatic
+    Server version notice   On
 
-                                              Automatic lets Codex choose. Always uses the
-                                              alternate screen; Never keeps the interface inline
-                                              with ordinary terminal scrollback. This is separate
-                                              from copy-friendly transcript rendering.
+  Terminal screen buffer · Applies after restarting Codex
+
+  Automatic lets Codex choose. Always uses the alternate screen; Never keeps the
+  interface inline with ordinary terminal scrollback. This is separate from copy-
+  friendly transcript rendering.
+
+
 
 
 
@@ -26,3 +25,5 @@ expression: text
 
 
   Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details

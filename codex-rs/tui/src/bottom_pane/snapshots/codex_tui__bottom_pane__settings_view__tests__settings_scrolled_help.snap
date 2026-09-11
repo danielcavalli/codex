@@ -4,13 +4,10 @@ expression: text
 ---
   Settings · saves automatically
   Appearance (1/6)
-  Tab / Shift+Tab section · ↑ / ↓ move
-  · ← / → change · esc back · r reset
-  · pgup / pgdn details
 
-  › Decorative effects       On
-    Animations               On
-    ○ Off
+  › Decorative effects  ‹ On ›
+
+  immediately
 
   Adds fading stars to the composer
   when using Astra. Turn off if the
@@ -20,3 +17,6 @@ expression: text
   color terminal.
   Changes save to your user
   preferences.
+  Tab / Shift+Tab section · ↑ / ↓ move
+  · ← / → change · esc back · r reset
+  · pgup / pgdn details
