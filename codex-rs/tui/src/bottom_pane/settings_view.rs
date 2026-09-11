@@ -1,5 +1,6 @@
 //! A sectioned preference page with explicit choices and optional contextual explanations.
-//! Navigation never writes config; accepting a choice saves it and reports the result in place.
+//! Up/Down navigates preferences; Left/Right changes and saves a value in place.
+//! Enter opens specialized pickers, and Escape closes the page.
 
 use super::BottomPaneView;
 use super::CancellationEvent;
@@ -36,7 +37,6 @@ pub(crate) struct SettingsView {
     settings: watch::Receiver<Tui>,
     section: usize,
     row: usize,
-    choice: Option<usize>,
     explain: bool,
     detail_scroll: u16,
     detail_max_scroll: std::cell::Cell<u16>,
@@ -57,7 +57,6 @@ impl SettingsView {
             settings,
             section: 0,
             row: 0,
-            choice: None,
             explain: false,
             detail_scroll: 0,
             detail_max_scroll: std::cell::Cell::new(/*value*/ 0),
@@ -100,15 +99,14 @@ impl SettingsView {
             Control::Picker(_) => lines.push("Open the picker to see and preview choices.".into()),
             Control::Toggle | Control::Choices(_) => {
                 let value = setting.value(&settings);
-                for (i, (label, json)) in setting.choices().iter().enumerate() {
+                for (label, json) in setting.choices() {
                     let current = serde_json::from_str::<serde_json::Value>(json)
                         .ok()
                         .as_ref()
                         == Some(&value);
-                    let cursor = if self.choice == Some(i) { "›" } else { " " };
                     let mark = if current { "●" } else { "○" };
-                    let line = format!("{cursor} {mark} {label}");
-                    lines.push(if self.choice == Some(i) {
+                    let line = format!("  {mark} {label}");
+                    lines.push(if current {
                         line.cyan().bold().into()
                     } else {
                         line.into()
@@ -132,24 +130,32 @@ impl SettingsView {
 
     fn footer(&self) -> Line<'static> {
         let mut spans = vec!["Tab section · ".into()];
-        for (action, label) in [
+        let picker = matches!(
+            SETTINGS[self.indices()[self.row]].control,
+            Control::Picker(_)
+        );
+        let mut actions = vec![
             (ListAction::MoveUp, " / "),
             (ListAction::MoveDown, " move · "),
-            (
-                ListAction::Accept,
-                if self.choice.is_some() {
-                    " save · "
-                } else {
-                    " choose · "
-                },
-            ),
-            (ListAction::Cancel, " back"),
-        ] {
+        ];
+        if picker {
+            actions.push((ListAction::Accept, " open · "));
+        } else {
+            actions.extend([
+                (ListAction::MoveLeft, " / "),
+                (ListAction::MoveRight, " change · "),
+            ]);
+        }
+        actions.push((ListAction::Cancel, " back"));
+        for (action, label) in actions {
             if let Some(hint) = self.keymap.primary_hint(action) {
                 spans.extend([hint.into(), label.into()]);
             }
         }
-        spans.push(" · ? help · r reset".into());
+        spans.push(" · ? help".into());
+        if !picker {
+            spans.push(" · r reset".into());
+        }
         if self.explain
             && let Some(hint) = self.keymap.primary_hint(ListAction::PageDown)
         {
@@ -179,9 +185,7 @@ impl BottomPaneView for SettingsView {
             return;
         }
         if self.keymap.cancel.is_pressed(key) {
-            if self.choice.take().is_none() {
-                self.complete = true;
-            }
+            self.complete = true;
             return;
         }
         if self.saving.is_some() {
@@ -216,7 +220,6 @@ impl BottomPaneView for SettingsView {
                 })
                 % SECTIONS.len();
             self.row = 0;
-            self.choice = None;
             self.detail_scroll = 0;
             return;
         }
@@ -224,41 +227,38 @@ impl BottomPaneView for SettingsView {
         let setting = &SETTINGS[indices[self.row]];
         if self.keymap.move_up.is_pressed(key) || self.keymap.move_down.is_pressed(key) {
             self.detail_scroll = 0;
-            let len = if self.choice.is_some() {
-                setting.choices().len()
-            } else {
-                indices.len()
-            };
-            let selected = self.choice.as_mut().unwrap_or(&mut self.row);
-            *selected = (*selected
+            let len = indices.len();
+            self.row = (self.row
                 + if self.keymap.move_up.is_pressed(key) {
                     len - 1
                 } else {
                     1
                 })
                 % len;
-        } else if self.keymap.accept.is_pressed(key) {
+        } else if (self.keymap.move_left.is_pressed(key) || self.keymap.move_right.is_pressed(key))
+            && !setting.choices().is_empty()
+        {
             self.detail_scroll = 0;
-            match (setting.control, self.choice) {
-                (Control::Picker(command), _) => self
-                    .app_event_tx
-                    .send(AppEvent::OpenTuiSettingsPicker(command)),
-                (_, Some(choice)) => self.save(Some(choice)),
-                (_, None) => {
-                    self.choice = Some(
-                        setting
-                            .choices()
-                            .iter()
-                            .position(|(_, json)| {
-                                serde_json::from_str::<serde_json::Value>(json)
-                                    .ok()
-                                    .as_ref()
-                                    == Some(&setting.value(&self.settings.borrow()))
-                            })
-                            .unwrap_or(0),
-                    )
-                }
-            }
+            let choices = setting.choices();
+            let value = setting.value(&self.settings.borrow());
+            let current = choices.iter().position(|(_, json)| {
+                serde_json::from_str::<serde_json::Value>(json)
+                    .ok()
+                    .as_ref()
+                    == Some(&value)
+            });
+            let choice = if self.keymap.move_left.is_pressed(key) {
+                current.unwrap_or(0).wrapping_add(choices.len() - 1) % choices.len()
+            } else {
+                current.map_or(0, |index| (index + 1) % choices.len())
+            };
+            self.save(Some(choice));
+        } else if self.keymap.accept.is_pressed(key)
+            && let Control::Picker(command) = setting.control
+        {
+            self.detail_scroll = 0;
+            self.app_event_tx
+                .send(AppEvent::OpenTuiSettingsPicker(command));
         } else if key.code == KeyCode::Char('r')
             && key.modifiers == KeyModifiers::NONE
             && !matches!(setting.control, Control::Picker(_))
@@ -289,7 +289,6 @@ impl BottomPaneView for SettingsView {
         match result {
             Ok(message) => {
                 self.status = message;
-                self.choice = None;
             }
             Err(error) => self.status = format!("Could not save: {error}"),
         }
@@ -363,11 +362,7 @@ impl Renderable for SettingsView {
             .skip(start)
             .map(|(row, index)| {
                 let setting = &SETTINGS[*index];
-                let prefix = if row == self.row && self.choice.is_none() {
-                    "›"
-                } else {
-                    " "
-                };
+                let prefix = if row == self.row { "›" } else { " " };
                 let label = format!(
                     "{prefix} {}  {}",
                     setting.label,
@@ -384,13 +379,7 @@ impl Renderable for SettingsView {
         let details = self.detail_lines(detail.width);
         self.detail_max_scroll
             .set((details.len() as u16).saturating_sub(detail.height));
-        // Keep the focused choice visible even in very short terminals.
-        let scroll = self
-            .choice
-            .map_or(0, |choice| {
-                (choice as u16 + 4).saturating_sub(detail.height)
-            })
-            .max(self.detail_scroll.min(self.detail_max_scroll.get()));
+        let scroll = self.detail_scroll.min(self.detail_max_scroll.get());
         Paragraph::new(details)
             .scroll((scroll, 0))
             .render(detail, buf);

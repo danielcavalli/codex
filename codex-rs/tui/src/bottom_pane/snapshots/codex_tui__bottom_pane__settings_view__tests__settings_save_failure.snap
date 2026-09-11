@@ -5,11 +5,11 @@ expression: text
   Settings
   [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
 
-    Decorative effects  On                   Decorative effects
+  › Decorative effects  On                   Decorative effects
     Animations  On                           Applies immediately
     Theme  Automatic
     Terminal pet  None                         ● On
-    Pet position  Composer                   › ○ Off
+    Pet position  Composer                     ○ Off
 
                                              ?  Explain this setting
 
@@ -21,4 +21,4 @@ expression: text
 
   Could not save: Read-only config file
 
-  Tab section · ↑ / ↓ move · enter save · esc back · ? help · r reset
+  Tab section · ↑ / ↓ move · ← / → change · esc back · ? help · r reset

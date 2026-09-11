@@ -66,18 +66,18 @@ fn settings_page_sections_and_contextual_help() {
 }
 
 #[test]
-fn settings_choices_save_only_when_accepted_and_keep_errors_retryable() {
+fn settings_arrows_save_directly_and_keep_errors_retryable() {
     let (mut view, mut events, settings) = page();
-    view.handle_key_event(KeyEvent::from(KeyCode::Enter));
     view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    view.handle_key_event(KeyEvent::from(KeyCode::Up));
     assert!(events.try_recv().is_err());
+    view.handle_key_event(KeyEvent::from(KeyCode::Right));
     snapshot(
         &view,
         "settings_choice_short",
         /*width*/ 40,
         /*height*/ 16,
     );
-    view.handle_key_event(KeyEvent::from(KeyCode::Enter));
     let AppEvent::SaveTuiSetting {
         index,
         choice,
@@ -97,17 +97,21 @@ fn settings_choices_save_only_when_accepted_and_keep_errors_retryable() {
         /*width*/ 100,
         /*height*/ 20,
     );
-    assert_eq!(view.choice, Some(1));
-    view.handle_key_event(KeyEvent::from(KeyCode::Enter));
-    let AppEvent::SaveTuiSetting { response_tx, .. } = events.try_recv().unwrap() else {
+    view.handle_key_event(KeyEvent::from(KeyCode::Right));
+    let AppEvent::SaveTuiSetting {
+        index,
+        choice,
+        response_tx,
+    } = events.try_recv().unwrap()
+    else {
         panic!("expected retry");
     };
+    assert_eq!((SETTINGS[index].key, choice), ("whimsy", Some(1)));
     settings.send_modify(|tui| tui.whimsy = false);
     response_tx
         .send(Ok("Saved. Applies immediately.".to_string()))
         .unwrap();
     view.pre_draw_tick(Instant::now());
-    assert_eq!(view.choice, None);
     assert!(!view.settings.borrow().whimsy);
     snapshot(
         &view,
@@ -115,6 +119,19 @@ fn settings_choices_save_only_when_accepted_and_keep_errors_retryable() {
         /*width*/ 100,
         /*height*/ 20,
     );
+    view.handle_key_event(KeyEvent::from(KeyCode::Left));
+    let AppEvent::SaveTuiSetting {
+        index,
+        choice,
+        response_tx,
+    } = events.try_recv().unwrap()
+    else {
+        panic!("expected left arrow to save");
+    };
+    assert_eq!((SETTINGS[index].key, choice), ("whimsy", Some(0)));
+    settings.send_modify(|tui| tui.whimsy = true);
+    response_tx.send(Ok("Saved.".to_string())).unwrap();
+    view.pre_draw_tick(Instant::now());
     view.handle_key_event(KeyEvent::from(KeyCode::Char('r')));
     assert!(matches!(
         events.try_recv().unwrap(),
@@ -125,12 +142,11 @@ fn settings_choices_save_only_when_accepted_and_keep_errors_retryable() {
 #[test]
 fn settings_cancel_and_picker_preserve_page() {
     let (mut view, mut events, settings) = page();
-    view.handle_key_event(KeyEvent::from(KeyCode::Enter));
-    view.handle_key_event(KeyEvent::from(KeyCode::Esc));
-    assert!(!view.is_complete());
+    view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    view.handle_key_event(KeyEvent::from(KeyCode::Left));
+    view.handle_key_event(KeyEvent::from(KeyCode::Right));
     assert!(events.try_recv().is_err());
-    view.handle_key_event(KeyEvent::from(KeyCode::Down));
-    view.handle_key_event(KeyEvent::from(KeyCode::Down));
     view.handle_key_event(KeyEvent::from(KeyCode::Enter));
     assert!(matches!(
         events.try_recv().unwrap(),
@@ -166,8 +182,43 @@ fn settings_explanation_scrolls_in_short_terminal_without_changing_preferences()
         /*width*/ 40,
         /*height*/ 18,
     );
-    view.handle_key_event(KeyEvent::from(KeyCode::Enter));
-    assert_eq!(view.detail_scroll, 0);
-    assert_eq!(view.choice, Some(0));
     assert!(events.try_recv().is_err());
+    view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    assert_eq!(view.detail_scroll, 0);
+    assert!(events.try_recv().is_err());
+}
+
+#[test]
+fn settings_arrows_cycle_presets_in_both_directions_from_custom_values() {
+    let (mut view, mut events, settings) = page();
+    settings.send_modify(|tui| tui.terminal_resize_reflow_max_rows = Some(1234));
+    view.handle_key_event(KeyEvent::from(KeyCode::BackTab));
+    view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    let setting = &SETTINGS[view.indices()[view.row]];
+    let last = setting.choices().len() - 1;
+    for (key, expected) in [
+        (KeyCode::Left, last),
+        (KeyCode::Right, 0),
+        (KeyCode::Left, last),
+        (KeyCode::Left, last - 1),
+        (KeyCode::Right, last),
+    ] {
+        view.handle_key_event(KeyEvent::from(key));
+        let AppEvent::SaveTuiSetting {
+            index,
+            choice,
+            response_tx,
+        } = events.try_recv().unwrap()
+        else {
+            panic!("expected arrow to save preset");
+        };
+        assert_eq!(
+            (SETTINGS[index].key, choice),
+            ("terminal_resize_reflow_max_rows", Some(expected))
+        );
+        let value = serde_json::from_str(setting.choices()[expected].1).unwrap();
+        settings.send_modify(|tui| tui.terminal_resize_reflow_max_rows = value);
+        response_tx.send(Ok("Saved.".to_string())).unwrap();
+        view.pre_draw_tick(Instant::now());
+    }
 }
