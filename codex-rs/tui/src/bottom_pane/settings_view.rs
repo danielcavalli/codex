@@ -1,5 +1,5 @@
-//! A sectioned preference page with explicit choices and optional contextual explanations.
-//! Up/Down navigates preferences; Left/Right changes and saves a value in place.
+//! A sectioned preference page with visible choices, explanations, and terminal capability feedback.
+//! Up/Down navigates preferences across sections; Left/Right changes and saves a value in place.
 //! Enter opens specialized pickers, and Escape closes the page.
 
 use super::BottomPaneView;
@@ -33,16 +33,22 @@ use std::time::Instant;
 use tokio::sync::oneshot;
 use tokio::sync::watch;
 
+struct PendingSave {
+    label: &'static str,
+    response: oneshot::Receiver<Result<String, String>>,
+}
+
 pub(crate) struct SettingsView {
     settings: watch::Receiver<Tui>,
     section: usize,
     row: usize,
-    explain: bool,
+    section_rows: [usize; SECTIONS.len()],
+    pet_support: crate::pets::PetImageSupport,
     detail_scroll: u16,
     detail_max_scroll: std::cell::Cell<u16>,
     complete: bool,
     status: String,
-    saving: Option<oneshot::Receiver<Result<String, String>>>,
+    saving: Option<PendingSave>,
     app_event_tx: AppEventSender,
     keymap: ListKeymap,
 }
@@ -52,12 +58,14 @@ impl SettingsView {
         settings: watch::Receiver<Tui>,
         app_event_tx: AppEventSender,
         keymap: ListKeymap,
+        pet_support: crate::pets::PetImageSupport,
     ) -> Self {
         Self {
             settings,
             section: 0,
             row: 0,
-            explain: false,
+            section_rows: [0; SECTIONS.len()],
+            pet_support,
             detail_scroll: 0,
             detail_max_scroll: std::cell::Cell::new(/*value*/ 0),
             complete: false,
@@ -76,15 +84,26 @@ impl SettingsView {
             .collect()
     }
 
+    fn select_section(&mut self, section: usize) {
+        self.section_rows[self.section] = self.row;
+        self.section = section;
+        self.row = self.section_rows[section];
+        self.detail_scroll = 0;
+    }
+
     fn save(&mut self, choice: Option<usize>) {
         let (response_tx, response_rx) = oneshot::channel();
+        let index = self.indices()[self.row];
         self.app_event_tx.send(AppEvent::SaveTuiSetting {
-            index: self.indices()[self.row],
+            index,
             choice,
             response_tx,
         });
-        self.saving = Some(response_rx);
-        self.status = "Saving…".to_string();
+        self.saving = Some(PendingSave {
+            label: SETTINGS[index].label,
+            response: response_rx,
+        });
+        self.status = format!("Saving {}…", SETTINGS[index].label);
     }
 
     fn detail_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -94,6 +113,15 @@ impl SettingsView {
             setting.timing_label().dim().into(),
             "".into(),
         ];
+        if let Some(reason) = setting.unavailable_reason(self.pet_support) {
+            lines[1] = "Unavailable in this terminal".dim().into();
+            lines.extend(
+                textwrap::wrap(reason, usize::from(width.max(1)))
+                    .into_iter()
+                    .map(|line| Line::from(line.into_owned())),
+            );
+            return lines;
+        }
         let settings = self.settings.borrow();
         match setting.control {
             Control::Picker(_) => lines.push("Open the picker to see and preview choices.".into()),
@@ -114,22 +142,17 @@ impl SettingsView {
                 }
             }
         }
-        if self.explain {
-            lines.push("".into());
-            lines.extend(
-                textwrap::wrap(setting.explanation, usize::from(width.max(1)))
-                    .into_iter()
-                    .map(|line| Line::from(line.into_owned())),
-            );
-        } else {
-            lines.push("".into());
-            lines.push("?  Explain this setting".dim().into());
-        }
+        lines.push("".into());
+        lines.extend(
+            textwrap::wrap(setting.explanation, usize::from(width.max(1)))
+                .into_iter()
+                .map(|line| Line::from(line.into_owned())),
+        );
         lines
     }
 
-    fn footer(&self) -> Line<'static> {
-        let mut spans = vec!["Tab section · ".into()];
+    fn navigation(&self) -> Line<'static> {
+        let mut spans = vec!["Tab / Shift+Tab section · ".into()];
         let picker = matches!(
             SETTINGS[self.indices()[self.row]].control,
             Control::Picker(_)
@@ -138,9 +161,12 @@ impl SettingsView {
             (ListAction::MoveUp, " / "),
             (ListAction::MoveDown, " move · "),
         ];
-        if picker {
+        let available = SETTINGS[self.indices()[self.row]]
+            .unavailable_reason(self.pet_support)
+            .is_none();
+        if picker && available {
             actions.push((ListAction::Accept, " open · "));
-        } else {
+        } else if available {
             actions.extend([
                 (ListAction::MoveLeft, " / "),
                 (ListAction::MoveRight, " change · "),
@@ -152,14 +178,20 @@ impl SettingsView {
                 spans.extend([hint.into(), label.into()]);
             }
         }
-        spans.push(" · ? help".into());
-        if !picker {
+        if !picker && available {
             spans.push(" · r reset".into());
         }
-        if self.explain
-            && let Some(hint) = self.keymap.primary_hint(ListAction::PageDown)
-        {
-            spans.extend([" · ".into(), hint.into(), " more".into()]);
+        if let (Some(up), Some(down)) = (
+            self.keymap.primary_hint(ListAction::PageUp),
+            self.keymap.primary_hint(ListAction::PageDown),
+        ) {
+            spans.extend([
+                " · ".into(),
+                up.into(),
+                " / ".into(),
+                down.into(),
+                " details".into(),
+            ]);
         }
         Line::from(spans)
     }
@@ -188,18 +220,6 @@ impl BottomPaneView for SettingsView {
             self.complete = true;
             return;
         }
-        if self.saving.is_some() {
-            return;
-        }
-        if key.code == KeyCode::Char('?')
-            && !key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-        {
-            self.explain = !self.explain;
-            self.detail_scroll = 0;
-            return;
-        }
         if self.keymap.page_down.is_pressed(key) {
             self.detail_scroll = self
                 .detail_scroll
@@ -212,29 +232,35 @@ impl BottomPaneView for SettingsView {
             return;
         }
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-            self.section = (self.section
+            let section = (self.section
                 + if key.code == KeyCode::BackTab {
                     SECTIONS.len() - 1
                 } else {
                     1
                 })
                 % SECTIONS.len();
-            self.row = 0;
-            self.detail_scroll = 0;
+            self.select_section(section);
             return;
         }
         let indices = self.indices();
         let setting = &SETTINGS[indices[self.row]];
         if self.keymap.move_up.is_pressed(key) || self.keymap.move_down.is_pressed(key) {
             self.detail_scroll = 0;
-            let len = indices.len();
-            self.row = (self.row
-                + if self.keymap.move_up.is_pressed(key) {
-                    len - 1
+            if self.keymap.move_up.is_pressed(key) {
+                if self.row == 0 {
+                    self.select_section((self.section + SECTIONS.len() - 1) % SECTIONS.len());
+                    self.row = self.indices().len() - 1;
                 } else {
-                    1
-                })
-                % len;
+                    self.row -= 1;
+                }
+            } else if self.row + 1 == indices.len() {
+                self.select_section((self.section + 1) % SECTIONS.len());
+                self.row = 0;
+            } else {
+                self.row += 1;
+            }
+        } else if self.saving.is_some() || setting.unavailable_reason(self.pet_support).is_some() {
+            // Keep unavailable rows focusable so their reason is accessible, but never edit them.
         } else if (self.keymap.move_left.is_pressed(key) || self.keymap.move_right.is_pressed(key))
             && !setting.choices().is_empty()
         {
@@ -275,22 +301,23 @@ impl BottomPaneView for SettingsView {
         {
             self.keymap = keymap.list;
         }
-        let Some(receiver) = self.saving.as_mut() else {
+        let Some(save) = self.saving.as_mut() else {
             return changed;
         };
-        let result = match receiver.try_recv() {
+        let result = match save.response.try_recv() {
             Ok(result) => result,
             Err(oneshot::error::TryRecvError::Empty) => return changed,
             Err(oneshot::error::TryRecvError::Closed) => {
                 Err("Save interrupted. Select the option again to retry.".to_string())
             }
         };
+        let label = save.label;
         self.saving = None;
         match result {
             Ok(message) => {
-                self.status = message;
+                self.status = format!("{label}: {message}");
             }
-            Err(error) => self.status = format!("Could not save: {error}"),
+            Err(error) => self.status = format!("Could not save {label}: {error}"),
         }
         true
     }
@@ -310,32 +337,51 @@ impl Renderable for SettingsView {
         ratatui::widgets::Block::default()
             .style(crate::style::user_message_style())
             .render(area, buf);
+        let area = Rect {
+            width: area.width.min(114),
+            ..area
+        };
         let width = area.width.saturating_sub(4).max(1);
-        let tabs = SECTIONS
-            .iter()
-            .enumerate()
-            .map(|(i, name)| {
-                if i == self.section {
-                    format!("[{name}]")
-                } else {
-                    (*name).to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("  ");
-        let mut header = vec![Line::from("Settings".bold())];
+        let compact = width < 90 && area.height < 22;
+        let tabs = if compact {
+            format!(
+                "{} ({}/{})",
+                SECTIONS[self.section],
+                self.section + 1,
+                SECTIONS.len()
+            )
+        } else {
+            SECTIONS
+                .iter()
+                .enumerate()
+                .map(|(i, name)| {
+                    if i == self.section {
+                        format!("[{name}]")
+                    } else {
+                        (*name).to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("  ")
+        };
+        let mut header = vec![Line::from(vec![
+            "Settings".bold(),
+            " · saves automatically".dim(),
+        ])];
         header.extend(
             textwrap::wrap(&tabs, usize::from(width))
                 .into_iter()
                 .map(|line| Line::from(line.into_owned().cyan())),
         );
-        let footer_line = self.footer();
-        let footer_lines = super::selection_popup_common::wrap_styled_line(&footer_line, width);
-        let [header_area, body, status, footer] = Layout::vertical([
+        let navigation = self.navigation();
+        header.extend(super::selection_popup_common::wrap_styled_line(
+            &navigation,
+            width,
+        ));
+        let [header_area, body, status] = Layout::vertical([
             Constraint::Length(header.len() as u16 + 1),
             Constraint::Fill(1),
             Constraint::Length(2),
-            Constraint::Length(footer_lines.len() as u16),
         ])
         .areas(area.inner(ratatui::layout::Margin::new(
             /*horizontal*/ 2, /*vertical*/ 0,
@@ -343,10 +389,14 @@ impl Renderable for SettingsView {
         Paragraph::new(header).render(header_area, buf);
         let indices = self.indices();
         let [fields, detail] = if body.width >= 90 {
-            Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(body)
+            Layout::horizontal([Constraint::Length(44), Constraint::Fill(1)]).areas(body)
         } else {
             Layout::vertical([
-                Constraint::Length((indices.len() as u16 + 1).min(body.height / 2)),
+                Constraint::Length(if compact {
+                    2.min(body.height / 2)
+                } else {
+                    (indices.len() as u16 + 1).min(body.height / 2)
+                }),
                 Constraint::Fill(1),
             ])
             .areas(body)
@@ -363,13 +413,17 @@ impl Renderable for SettingsView {
             .map(|(row, index)| {
                 let setting = &SETTINGS[*index];
                 let prefix = if row == self.row { "›" } else { " " };
-                let label = format!(
-                    "{prefix} {}  {}",
-                    setting.label,
+                let unavailable = setting.unavailable_reason(self.pet_support).is_some();
+                let value = if unavailable {
+                    "Unavailable".to_string()
+                } else {
                     setting.value_label(&settings)
-                );
-                if row == self.row {
-                    label.bold().into()
+                };
+                let label = format!("{prefix} {:<24} {value}", setting.label);
+                if unavailable {
+                    label.dim().into()
+                } else if row == self.row {
+                    label.cyan().bold().into()
                 } else {
                     label.into()
                 }
@@ -388,15 +442,18 @@ impl Renderable for SettingsView {
             .map(|line| Line::from(line.into_owned().dim()))
             .collect::<Vec<_>>();
         Paragraph::new(status_lines).render(status, buf);
-        Paragraph::new(footer_lines).render(footer, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        let detail_height = self.detail_lines(width.saturating_sub(4)).len() as u16;
-        if width >= 94 {
-            detail_height.max(7) + 8
+        let width = width.min(114).saturating_sub(4).max(1);
+        let details_width = if width >= 90 { width - 44 } else { width };
+        let detail_height = self.detail_lines(details_width).len() as u16;
+        let navigation_height =
+            super::selection_popup_common::wrap_styled_line(&self.navigation(), width).len() as u16;
+        if width >= 90 {
+            detail_height.max(self.indices().len() as u16) + navigation_height + 6
         } else {
-            detail_height + self.indices().len() as u16 + 9
+            detail_height + self.indices().len() as u16 + navigation_height + 10
         }
     }
 }

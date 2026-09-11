@@ -38,6 +38,16 @@ pub(crate) struct Setting {
 }
 
 impl Setting {
+    pub(crate) fn unavailable_reason(
+        &self,
+        pet_support: crate::pets::PetImageSupport,
+    ) -> Option<&'static str> {
+        match self.key {
+            "pet" | "pet_anchor" => pet_support.unsupported_message(),
+            _ => None,
+        }
+    }
+
     const fn new(
         section: usize,
         key: &'static str,

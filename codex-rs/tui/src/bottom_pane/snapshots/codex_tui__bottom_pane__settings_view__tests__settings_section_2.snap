@@ -2,18 +2,19 @@
 source: tui/src/bottom_pane/settings_view_tests.rs
 expression: text
 ---
-  Settings
+  Settings · saves automatically
   Appearance  Input & copying  [Notifications]  Conversation  Sessions  Advanced
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details
 
-  › Notifications  On                        Notifications
-    Delivery  Automatic                      Applies immediately
-    When to notify  When unfocused
-                                               ● On
-                                               ○ Off
+  › Notifications            On               Notifications
+    Delivery                 Automatic        Applies immediately
+    When to notify           When unfocused
+                                                ● On
+                                                ○ Off
 
-                                             Allow or silence terminal notifications. If you
-                                             configured a custom event list, selecting On replaces
-                                             it with all supported notification events.
+                                              Allow or silence terminal notifications. If you
+                                              configured a custom event list, selecting On
+                                              replaces it with all supported notification events.
 
 
 
@@ -25,5 +26,3 @@ expression: text
 
 
   Changes save to your user preferences.
-
-  Tab section · ↑ / ↓ move · ← / → change · esc back · ? help · r reset · pgdn more

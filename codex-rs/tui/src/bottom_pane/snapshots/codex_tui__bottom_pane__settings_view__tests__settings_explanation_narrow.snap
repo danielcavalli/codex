@@ -2,15 +2,17 @@
 source: tui/src/bottom_pane/settings_view_tests.rs
 expression: text
 ---
-  Settings
+  Settings · saves automatically
   [Appearance]  Input & copying  Notifications
   Conversation  Sessions  Advanced
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change ·
+  esc back · r reset · pgup / pgdn details
 
-  › Decorative effects  On
-    Animations  On
-    Theme  Automatic
-    Terminal pet  None
-    Pet position  Composer
+  › Decorative effects       On
+    Animations               On
+    Theme                    Automatic
+    Terminal pet             None
+    Pet position             Composer
 
   Decorative effects
   Applies immediately
@@ -27,6 +29,3 @@ expression: text
 
 
   Changes save to your user preferences.
-
-  Tab section · ↑ / ↓ move · ← / → change · esc back · ?
-  help · r reset · pgdn more

@@ -2,19 +2,20 @@
 source: tui/src/bottom_pane/settings_view_tests.rs
 expression: text
 ---
-  Settings
+  Settings · saves automatically
   Appearance  [Input & copying]  Notifications  Conversation  Sessions  Advanced
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details
 
-  › Copy-friendly output  Off                Copy-friendly output
-    Start in Vim mode  Off                   Applies immediately
+  › Copy-friendly output     Off              Copy-friendly output
+    Start in Vim mode        Off              Applies immediately
     Disable paste detection  Default
-    Escape from questions  On                  ○ On
-    Keyboard shortcuts  Customize…             ● Off
+    Escape from questions    On                 ○ On
+    Keyboard shortcuts       Customize…         ● Off
 
-                                             Uses raw scrollback rendering to make transcript text
-                                             easier to select and copy with your terminal. The
-                                             transcript is redrawn when you change this setting.
-                                             You can also use /raw.
+                                              Uses raw scrollback rendering to make transcript
+                                              text easier to select and copy with your terminal.
+                                              The transcript is redrawn when you change this
+                                              setting. You can also use /raw.
 
 
 
@@ -25,5 +26,3 @@ expression: text
 
 
   Changes save to your user preferences.
-
-  Tab section · ↑ / ↓ move · ← / → change · esc back · ? help · r reset · pgdn more

@@ -2,18 +2,19 @@
 source: tui/src/bottom_pane/settings_view_tests.rs
 expression: text
 ---
-  Settings
+  Settings · saves automatically
   Appearance  Input & copying  Notifications  [Conversation]  Sessions  Advanced
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details
 
-  › Automatic recaps  On                     Automatic recaps
-    Startup tips  On                         Applies immediately
-    Status line  Default
-    Window title  Default                      ● On
-    Status line colors  On                     ○ Off
+  › Automatic recaps         On               Automatic recaps
+    Startup tips             On               Applies immediately
+    Status line              Default
+    Window title             Default            ● On
+    Status line colors       On                 ○ Off
 
-                                             Generate conversation recaps when the terminal is
-                                             unfocused. Turning this off keeps /recap available
-                                             on demand.
+                                              Generate conversation recaps when the terminal is
+                                              unfocused. Turning this off keeps /recap available
+                                              on demand.
 
 
 
@@ -25,5 +26,3 @@ expression: text
 
 
   Changes save to your user preferences.
-
-  Tab section · ↑ / ↓ move · ← / → change · esc back · ? help · r reset · pgdn more

@@ -26,6 +26,7 @@ impl ChatWidget {
             rx,
             self.app_event_tx.clone(),
             self.bottom_pane.list_keymap(),
+            self.pet_image_support(),
         )));
     }
 
