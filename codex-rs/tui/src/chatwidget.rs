@@ -432,6 +432,7 @@ mod service_tiers;
 mod settings;
 mod settings_popups;
 mod side;
+mod tui_settings;
 use self::safety_buffering::SafetyBufferingState;
 mod status_state;
 mod windows_sandbox_prompts;
@@ -574,6 +575,7 @@ pub(crate) struct ChatWidget {
     transcript: TranscriptState,
     config: Config,
     pub(crate) local_settings: crate::local_settings::LocalSettings,
+    tui_settings_tx: Option<tokio::sync::watch::Sender<codex_config::types::Tui>>,
     raw_output_mode: bool,
     /// Runtime value resolved by core. `config.service_tier` remains the explicit user choice.
     effective_service_tier: Option<String>,

@@ -1,0 +1,29 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings
+  Appearance  [Input & copying]  Notifications  Conversation  Sessions  Advanced
+
+  › Copy-friendly output  Off                Copy-friendly output
+    Start in Vim mode  Off                   Applies immediately
+    Disable paste detection  Default
+    Escape from questions  On                  ○ On
+    Keyboard shortcuts  Customize…             ● Off
+
+                                             Uses raw scrollback rendering to make transcript text
+                                             easier to select and copy with your terminal. The
+                                             transcript is redrawn when you change this setting.
+                                             You can also use /raw.
+
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab section · ↑ / ↓ move · enter choose · esc back · ? help · r reset · pgdn more

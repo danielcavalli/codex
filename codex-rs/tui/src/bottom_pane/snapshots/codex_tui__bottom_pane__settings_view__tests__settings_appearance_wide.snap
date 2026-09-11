@@ -1,0 +1,24 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings
+  [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
+
+  › Decorative effects  On                        Decorative effects
+    Animations  On                                Applies immediately
+    Theme  Automatic
+    Terminal pet  None                              ● On
+    Pet position  Composer                          ○ Off
+
+                                                  ?  Explain this setting
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab section · ↑ / ↓ move · enter choose · esc back · ? help · r reset

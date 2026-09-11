@@ -219,6 +219,7 @@ mod token_usage;
 mod tooltips;
 mod transcript_reflow;
 mod tui;
+mod tui_settings;
 mod ui_consts;
 mod unarchive_prompt;
 pub(crate) mod update_action;

@@ -1,0 +1,29 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings
+  Appearance  Input & copying  [Notifications]  Conversation  Sessions  Advanced
+
+  › Notifications  On                        Notifications
+    Delivery  Automatic                      Applies immediately
+    When to notify  When unfocused
+                                               ● On
+                                               ○ Off
+
+                                             Allow or silence terminal notifications. If you
+                                             configured a custom event list, selecting On replaces
+                                             it with all supported notification events.
+
+
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab section · ↑ / ↓ move · enter choose · esc back · ? help · r reset · pgdn more

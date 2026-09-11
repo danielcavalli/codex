@@ -1,0 +1,20 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings
+  [Appearance]  Input & copying
+  Notifications  Conversation
+  Sessions  Advanced
+
+    Decorative effects  On
+    Animations  On
+    Theme  Automatic
+  Applies immediately
+
+    ● On
+  › ○ Off
+  Changes save to your user
+  preferences.
+  Tab section · ↑ / ↓ move · enter
+  save · esc back · ? help · r reset

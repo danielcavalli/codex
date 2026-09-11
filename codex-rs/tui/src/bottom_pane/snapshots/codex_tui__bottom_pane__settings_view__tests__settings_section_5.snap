@@ -1,0 +1,29 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings
+  Appearance  Input & copying  Notifications  Conversation  Sessions  [Advanced]
+
+  › Terminal screen buffer  Automatic        Terminal screen buffer
+    Resize history  Automatic                Applies after restarting Codex
+    Server version notice  On
+                                               ● Automatic
+                                               ○ Always alternate
+                                               ○ Never alternate
+
+                                             Automatic lets Codex choose. Always uses the
+                                             alternate screen; Never keeps the interface inline
+                                             with ordinary terminal scrollback. This is separate
+                                             from copy-friendly transcript rendering.
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab section · ↑ / ↓ move · enter choose · esc back · ? help · r reset · pgdn more
