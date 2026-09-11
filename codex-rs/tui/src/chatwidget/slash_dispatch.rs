@@ -360,6 +360,7 @@ impl ChatWidget {
             SlashCommand::Vim => {
                 self.toggle_vim_mode_and_notify();
             }
+            SlashCommand::Settings => self.app_event_tx.send(AppEvent::OpenTuiSettings),
             SlashCommand::Keymap => {
                 self.open_keymap_picker();
             }
@@ -1237,6 +1238,7 @@ impl ChatWidget {
             | SlashCommand::Title
             | SlashCommand::Statusline
             | SlashCommand::Theme
+            | SlashCommand::Settings
             | SlashCommand::Pets => QueueDrain::Stop,
         }
     }

@@ -1,0 +1,28 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings · saves automatically
+  [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
+
+    Decorative effects  On
+    Animations          On
+    Theme               Automatic
+    Terminal pet        Unavailable
+  › Pet position        Unavailable
+
+  Pet position · Unavailable in this terminal
+
+  Pets are disabled in tmux. Terminal images don’t stay pane-local in tmux and can
+  corrupt scrollback or move between panes. Run Codex outside tmux to use pets.
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · esc back · pgup / pgdn details

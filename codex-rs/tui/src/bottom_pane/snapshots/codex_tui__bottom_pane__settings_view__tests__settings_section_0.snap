@@ -1,0 +1,29 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings · saves automatically
+  [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
+
+  › Decorative effects  ‹ On ›
+    Animations          On
+    Theme               Automatic
+    Terminal pet        None
+    Pet position        Composer
+
+  Decorative effects · Applies immediately
+
+  Adds fading stars to the composer when using Astra. Turn off if the repeated
+  terminal redraws disrupt text selection and copying. Stars also require
+  animations and a true-color terminal.
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details

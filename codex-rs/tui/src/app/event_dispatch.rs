@@ -3101,6 +3101,16 @@ impl App {
                     }
                 }
             }
+            AppEvent::OpenTuiSettings => {
+                self.chat_widget.open_tui_settings(self.local_settings.tui.clone());
+            }
+            AppEvent::OpenTuiSettingsPicker(command) => {
+                self.chat_widget.open_tui_settings_picker(command);
+            }
+            AppEvent::SaveTuiSetting { index, choice, response_tx } => {
+                let result = self.save_tui_setting(tui, index, choice).await;
+                let _ = response_tx.send(result);
+            }
             AppEvent::StatusLineBranchUpdated { cwd, branch } => {
                 self.chat_widget.set_status_line_branch(cwd, branch);
                 self.refresh_status_line();
@@ -3287,6 +3297,8 @@ impl App {
                 }
             }
         }
+        self.chat_widget
+            .refresh_tui_settings_page(&self.local_settings.tui);
         Ok(AppRunControl::Continue)
     }
 

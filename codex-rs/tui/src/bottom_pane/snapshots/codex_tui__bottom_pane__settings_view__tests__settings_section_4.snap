@@ -1,0 +1,29 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings · saves automatically
+  Appearance  Input & copying  Notifications  Conversation  [Sessions]  Advanced
+
+  › Session picker layout  ‹ Default ›
+    Resume directory       Ask
+
+  Session picker layout · Applies to the next session
+
+  Dense fits more saved sessions on screen. Comfortable provides more space
+  between session results.
+
+
+
+
+
+
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · ← / → change · esc back · r reset · pgup / pgdn details

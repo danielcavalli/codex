@@ -15,6 +15,7 @@ pub enum SlashCommand {
     Model,
     Ide,
     Permissions,
+    Settings,
     Keymap,
     Vim,
     #[strum(serialize = "setup-default-sandbox")]
@@ -137,6 +138,7 @@ impl SlashCommand {
                 "start a side conversation in an ephemeral fork"
             }
             SlashCommand::Permissions => "choose what Codex is allowed to do",
+            SlashCommand::Settings => "configure terminal preferences with explanations",
             SlashCommand::Keymap => "remap TUI shortcuts",
             SlashCommand::Vim => "toggle Vim mode for the composer",
             SlashCommand::ElevateSandbox => "set up elevated agent sandbox",
@@ -214,6 +216,7 @@ impl SlashCommand {
             | SlashCommand::Compact
             | SlashCommand::Recap
             | SlashCommand::Export
+            | SlashCommand::Settings
             | SlashCommand::Keymap
             | SlashCommand::Vim
             | SlashCommand::ElevateSandbox

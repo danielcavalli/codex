@@ -1,0 +1,26 @@
+---
+source: tui/src/bottom_pane/settings_view_tests.rs
+expression: text
+---
+  Settings · saves automatically
+  [Appearance]  Input & copying  Notifications  Conversation  Sessions  Advanced
+
+    Decorative effects  On
+    Animations          On
+  › Theme               Automatic
+    Terminal pet        None
+    Pet position        Composer
+
+  Theme · Applies immediately
+
+  Choose a syntax-highlighting theme with a live preview. Custom themes can also
+  be installed in your Codex themes directory.
+
+
+
+
+
+
+  Changes save to your user preferences.
+
+  Tab / Shift+Tab section · ↑ / ↓ move · enter open · esc back · pgup / pgdn details

@@ -1310,6 +1310,17 @@ pub(crate) enum AppEvent {
     /// Save an enable prompt on the app server without changing the current thread.
     EnableFeatureForNewThreads(Feature),
 
+    /// Open the terminal preferences page.
+    OpenTuiSettings,
+    /// Open a specialized picker above the settings page.
+    OpenTuiSettingsPicker(crate::slash_command::SlashCommand),
+    /// Save one curated preference, or remove its user override when choice is absent.
+    SaveTuiSetting {
+        index: usize,
+        choice: Option<usize>,
+        response_tx: tokio::sync::oneshot::Sender<Result<String, String>>,
+    },
+
     /// Update memory settings and persist them to config.toml.
     UpdateMemorySettings {
         use_memories: bool,

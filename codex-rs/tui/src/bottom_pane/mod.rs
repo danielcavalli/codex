@@ -131,6 +131,8 @@ mod file_search_popup;
 mod footer;
 mod list_selection_view;
 mod memories_settings_view;
+mod settings_view;
+pub(crate) use settings_view::SettingsView;
 mod mentions_v2;
 pub(crate) mod prompt_args;
 mod skill_popup;
