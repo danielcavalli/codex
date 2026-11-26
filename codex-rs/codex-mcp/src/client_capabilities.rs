@@ -69,6 +69,7 @@ pub fn client_mcp_extensions(
                     | OPENAI_ELICITATION_EXTENSION_ID
                     | OPENAI_STANDARD_FORM_INPUT_EXTENSION_ID
                     | MCP_APP_UI_EXTENSION_ID
+                    | "codex/terminal-panel"
             )
         })
         .map(|(id, value)| (id.clone(), value.clone()))

@@ -1923,6 +1923,7 @@ pub(crate) enum AppEvent {
     },
     /// Dismiss the status-line setup UI without changing config.
     StatusLineSetupCancelled,
+    OpenMcpPanel,
     OpenStatuslinePicker(crate::key_hint::KeyBinding),
     CloseStatuslinePicker(uuid::Uuid),
     ChooseStatuslineProvider {

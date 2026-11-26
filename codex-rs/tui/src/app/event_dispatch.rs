@@ -484,6 +484,20 @@ impl App {
                     }
                 }
             }
+            AppEvent::OpenMcpPanel => {
+                if let Some(thread) = self.current_displayed_thread_id()
+                    && self.displayed_conversation_backend_id() == Some(app_server.backend_id())
+                {
+                    let client = app_server.request_handle();
+                    let result = tui.with_restored(tui::TerminalHandoff::Restore, || {
+                        crate::mcp_panel::open(client, thread)
+                    }).await;
+                    if let Err(error) = result {
+                        self.chat_widget.add_error_message(format!("Could not open MCP panel: {error}"));
+                    }
+                    tui.frame_requester().schedule_frame();
+                }
+            }
             AppEvent::OpenStatuslinePicker(key) => {
                 if self.chat_widget.active_view_is(crate::bottom_pane::StatusLineSetupView::VIEW_ID) {
                     self.open_statusline_picker(app_server);

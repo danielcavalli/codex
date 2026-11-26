@@ -582,6 +582,7 @@ impl ChatWidget {
             SlashCommand::Title => {
                 self.open_terminal_title_setup();
             }
+            SlashCommand::Panel => self.app_event_tx.send(AppEvent::OpenMcpPanel),
             SlashCommand::Statusline => {
                 self.open_status_line_setup();
             }
@@ -1399,6 +1400,7 @@ impl ChatWidget {
             | SlashCommand::Import
             | SlashCommand::Hooks
             | SlashCommand::Title
+            | SlashCommand::Panel
             | SlashCommand::Statusline
             | SlashCommand::Config
             | SlashCommand::Theme

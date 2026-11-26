@@ -65,6 +65,7 @@ pub enum SlashCommand {
     DebugConfig,
     Title,
     Statusline,
+    Panel,
     Theme,
     #[strum(to_string = "pets", serialize = "pet")]
     Pets,
@@ -128,6 +129,7 @@ impl SlashCommand {
             SlashCommand::Usage => "view account usage or use a usage limit reset",
             SlashCommand::DebugConfig => "show config layers and requirement sources for debugging",
             SlashCommand::Title => "configure which items appear in the terminal title",
+            SlashCommand::Panel => "open an interactive MCP app panel",
             SlashCommand::Statusline => "configure which items appear in the status line",
             SlashCommand::Theme => "choose a syntax highlighting theme",
             SlashCommand::Pets => "choose or hide the terminal pet",
@@ -276,6 +278,7 @@ impl SlashCommand {
             | SlashCommand::Clear
             | SlashCommand::Logout
             | SlashCommand::MemoryDrop
+            | SlashCommand::Panel
             | SlashCommand::MemoryUpdate => false,
             SlashCommand::Diff
             | SlashCommand::Archive

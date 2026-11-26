@@ -273,6 +273,33 @@ pub struct InProcessClientStartArgs {
     pub channel_capacity: usize,
 }
 
+/// Only the opt-in terminal host can interpret terminal panel resources.
+pub fn terminal_panel_extensions(
+    client: &str,
+) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+    if !cfg!(unix) || client != "codex-tui" {
+        return None;
+    }
+    let python = std::path::PathBuf::from(std::env::var_os("CODEX_PANEL_PYTHON")?);
+    if !python.is_absolute() || !python.is_file() {
+        return None;
+    }
+    let mut extensions = std::collections::HashMap::from([(
+        "codex/terminal-panel".to_owned(),
+        serde_json::json!({"version":1}),
+    )]);
+    if std::env::var_os("CODEX_PANEL_CHROMIUM")
+        .map(std::path::PathBuf::from)
+        .is_some_and(|path| path.is_absolute() && path.is_file())
+    {
+        extensions.insert(
+            "io.modelcontextprotocol/ui".to_owned(),
+            serde_json::json!({"mimeTypes":["text/html;profile=mcp-app"]}),
+        );
+    }
+    Some(extensions)
+}
+
 impl InProcessClientStartArgs {
     /// Builds initialize params from caller-provided metadata.
     pub fn initialize_params(&self) -> InitializeParams {
@@ -281,7 +308,7 @@ impl InProcessClientStartArgs {
             explicit_gateway_oauth: false,
             experimental_api: self.experimental_api,
             request_attestation: false,
-            extensions: None,
+            extensions: terminal_panel_extensions(&self.client_name),
             opt_out_notification_methods: if self.opt_out_notification_methods.is_empty() {
                 None
             } else {

@@ -33,6 +33,7 @@ impl ChatWidget {
                 | SlashCommand::Memories
                 | SlashCommand::Config
                 | SlashCommand::Title
+                | SlashCommand::Panel
                 | SlashCommand::Statusline
                 | SlashCommand::Theme,
             ) => false,
