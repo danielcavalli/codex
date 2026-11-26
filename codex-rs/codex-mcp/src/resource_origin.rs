@@ -246,24 +246,13 @@ impl ResourceOrigin {
             + self.uri.len()
     }
 
-    pub(crate) async fn read(
-        &self,
-        binding: &McpBinding,
-        thread_id: ThreadId,
-        mut params: ReadResourceRequestParams,
-    ) -> anyhow::Result<ReadResourceResult> {
-        if self.uri != params.uri {
-            anyhow::bail!("originating MCP tool call does not match the requested resource");
-        }
+    fn validate_tool(&self, binding: &McpBinding, tool: &str) -> anyhow::Result<()> {
         if self.ambiguous_account {
             anyhow::bail!("originating MCP tool call has ambiguous account selection");
         }
 
         let tool_info = binding
-            .tool_info(
-                &McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME),
-                &self.tool,
-            )
+            .tool_info(&McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME), tool)
             .context("originating MCP tool is unavailable")?;
         if tool_info.connector_id.as_deref() != Some(self.connector_id.as_str()) {
             anyhow::bail!("originating MCP tool connector does not match its app context");
@@ -290,7 +279,7 @@ impl ResourceOrigin {
         if !AppToolPolicyEvaluator::new(&binding.config().config_layer_stack)
             .policy(AppToolPolicyInput {
                 connector_id: Some(&self.connector_id),
-                link_id: None,
+                link_id: self.link_id.as_deref(),
                 tool_name: tool_info.tool.name.as_ref(),
                 tool_title: tool_info.tool.title.as_deref(),
                 destructive_hint: annotations.and_then(|value| value.destructive_hint),
@@ -301,6 +290,61 @@ impl ResourceOrigin {
             anyhow::bail!("originating MCP tool is disabled by app configuration");
         }
 
+        Ok(())
+    }
+
+    /// Pin execution and both catalog lookups to the same connection revision.
+    pub(crate) async fn call(
+        &self,
+        binding: &McpBinding,
+        thread_id: ThreadId,
+        tool: &str,
+        arguments: Option<serde_json::Value>,
+    ) -> anyhow::Result<rmcp::model::CallToolResult> {
+        self.validate_tool(binding, &self.tool)?;
+        self.validate_tool(binding, tool)?;
+        let key = McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME);
+        let call = binding
+            .prepare_app_call(&key, tool)
+            .context("tool unavailable for app interaction")?;
+        anyhow::ensure!(call.is_host_owned_apps(), "invalid hosted app registration");
+        if let Some(args) = &arguments {
+            anyhow::ensure!(args.is_object(), "panel action arguments must be an object");
+            for (key, expected) in [
+                ("connector_id", Some(self.connector_id.as_str())),
+                ("link_id", self.link_id.as_deref()),
+            ] {
+                if let Some(value) = args.get(key) {
+                    anyhow::ensure!(
+                        value.as_str().is_some() && value.as_str() == expected,
+                        "panel action changed its account or connector"
+                    );
+                }
+            }
+        }
+        call.call(
+            arguments,
+            Some(serde_json::json!({
+                "threadId": thread_id,
+                "x-codex-turn-metadata": {"mcp_request_meta": {
+                    "selected_connector_ids": [&self.connector_id], "link_id": &self.link_id
+                }}
+            })),
+            None,
+        )
+        .await
+    }
+
+    pub(crate) async fn read(
+        &self,
+        binding: &McpBinding,
+        thread_id: ThreadId,
+        mut params: ReadResourceRequestParams,
+    ) -> anyhow::Result<ReadResourceResult> {
+        if self.uri != params.uri {
+            anyhow::bail!("originating MCP tool call does not match the requested resource");
+        }
+        self.validate_tool(binding, &self.tool)?;
         let meta = params.meta.get_or_insert_default();
         meta.insert("threadId".into(), serde_json::json!(thread_id));
         meta.insert(

@@ -193,6 +193,10 @@ impl SampleTask {
             .await;
         options.config.ephemeral = true;
         if observer {
+            let prefix = parent
+                .observer_prefix()
+                .ok_or_else(|| invalid_request("observer source has no cached request shape"))?;
+            options.thread_extension_init.insert(prefix);
             options
                 .config
                 .features

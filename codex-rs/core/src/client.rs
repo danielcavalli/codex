@@ -342,6 +342,26 @@ impl RequestRouteTelemetry {
     }
 }
 
+/// Only the generated header and schema are retained. The digest verifies the
+/// reconstructed history before sending any private request to the provider.
+#[derive(Clone, Debug)]
+pub struct ObserverPrefix {
+    model: String,
+    header: Vec<ResponseItem>,
+    tools: Option<codex_api::ResponsesApiTools>,
+    parallel_tool_calls: bool,
+    item_count: usize,
+    digest: blake3::Hash,
+}
+
+impl ObserverPrefix {
+    fn digest(items: &[ResponseItem]) -> Result<blake3::Hash> {
+        let mut hasher = blake3::Hasher::new();
+        serde_json::to_writer(&mut hasher, items)?;
+        Ok(hasher.finalize())
+    }
+}
+
 /// A session-scoped client for model-provider API calls.
 ///
 /// This holds configuration and state that should be shared across turns within a Codex session
@@ -358,6 +378,8 @@ pub struct ModelClient {
     state: Arc<ModelClientState>,
     agent_identity_policy: AgentIdentityAuthPolicy,
     prompt_cache_key_policy: PromptCacheKey,
+    observed_prefix: Option<Arc<StdMutex<Option<ObserverPrefix>>>>,
+    inherited_prefix: Option<Arc<ObserverPrefix>>,
     session_id_override: Option<String>,
     codex_responses_headers: Option<Arc<CodexResponsesHeaders>>,
     event_sender: Option<Sender<ProtocolEvent>>,
@@ -711,6 +733,8 @@ impl ModelClient {
             }),
             agent_identity_policy,
             prompt_cache_key_policy: PromptCacheKey::default(),
+            observed_prefix: None,
+            inherited_prefix: None,
             session_id_override: None,
             codex_responses_headers: None,
             event_sender: None,
@@ -723,6 +747,24 @@ impl ModelClient {
                 cyber_access_program::ApiKeyCyberAccessPrograms::UnsupportedProvider,
             required_cyber_access_programs: None,
         }
+    }
+
+    pub(crate) fn with_observer_prefix(
+        mut self,
+        capture: bool,
+        inherited: Option<Arc<ObserverPrefix>>,
+    ) -> Self {
+        self.observed_prefix = capture.then(Default::default);
+        self.inherited_prefix = inherited;
+        self
+    }
+
+    pub(crate) fn observer_prefix(&self) -> Option<ObserverPrefix> {
+        self.observed_prefix
+            .as_ref()?
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(crate) fn with_executed_tool_calls(mut self, recorder: ExecutedToolCalls) -> Self {
@@ -1303,6 +1345,20 @@ impl ModelClient {
             )));
             prefix.push(instructions);
         }
+        let mut parallel_tool_calls = prompt.parallel_tool_calls && !model_info.use_responses_lite;
+        let tools = if let Some(parent) = &self.inherited_prefix {
+            if parent.model != model_info.slug {
+                return Err(CodexErr::InvalidRequest(
+                    "observer source model changed".into(),
+                ));
+            }
+            prefix.clone_from(&parent.header);
+            parallel_tool_calls = parent.parallel_tool_calls;
+            parent.tools.clone()
+        } else {
+            tools
+        };
+        let header_len = prefix.len();
         input.splice(0..0, prefix);
         if !model_info.use_responses_lite {
             // Only RLite accepts per-content attribution until the Responses API schema expands.
@@ -1377,6 +1433,30 @@ impl ModelClient {
                 }
             }
         }
+        if let Some(parent) = &self.inherited_prefix {
+            let matches = match input.get(..parent.item_count) {
+                Some(items) => ObserverPrefix::digest(items)? == parent.digest,
+                None => false,
+            };
+            if !matches {
+                return Err(CodexErr::InvalidRequest(
+                    "observer source prefix changed".into(),
+                ));
+            }
+        }
+        if let Some(capture) = &self.observed_prefix {
+            let snapshot = ObserverPrefix {
+                model: model_info.slug.clone(),
+                header: input[..header_len].to_vec(),
+                tools: tools.clone(),
+                parallel_tool_calls,
+                item_count: input.len(),
+                digest: ObserverPrefix::digest(&input)?,
+            };
+            *capture
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(snapshot);
+        }
         let client_metadata = responses_metadata.client_metadata(include_internal);
         let observer = matches!(&self.state.session_source, SessionSource::Custom(name) if name == "turn_observer");
         let request = ResponsesApiRequest {
@@ -1385,7 +1465,7 @@ impl ModelClient {
             tools,
             max_output_tokens: observer.then_some(1024),
             tool_choice: if observer { "none" } else { "auto" }.to_string(),
-            parallel_tool_calls: prompt.parallel_tool_calls && !model_info.use_responses_lite,
+            parallel_tool_calls,
             reasoning: Some(reasoning),
             store: false,
             stream: true,

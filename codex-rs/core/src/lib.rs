@@ -8,6 +8,7 @@
 mod apply_patch;
 mod apps;
 mod client;
+pub use client::ObserverPrefix;
 mod client_common;
 mod model_request;
 mod realtime_context;

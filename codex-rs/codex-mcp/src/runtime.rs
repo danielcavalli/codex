@@ -390,6 +390,25 @@ impl McpRuntime {
         origin.read(&binding, thread_id, params).await
     }
 
+    pub async fn call_tool_for_origin(
+        &self,
+        thread_id: ThreadId,
+        origin_id: &str,
+        tool: &str,
+        arguments: Option<serde_json::Value>,
+    ) -> anyhow::Result<CallToolResult> {
+        let origin = self
+            .resource_origins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .find(origin_id)?;
+        let binding = self
+            .current_binding_for_call(&McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME))
+            .await
+            .ok_or_else(|| anyhow::anyhow!("codex_apps MCP server is unavailable"))?;
+        origin.call(&binding, thread_id, tool, arguments).await
+    }
+
     pub async fn new(input: McpRuntimeInput) -> Self {
         let runtime = Self::empty(input.config.prefix_mcp_tool_names);
         runtime.replace(input).await;

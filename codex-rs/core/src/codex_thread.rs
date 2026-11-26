@@ -1724,11 +1724,33 @@ impl CodexThread {
         meta: Option<serde_json::Value>,
     ) -> anyhow::Result<CallToolResult> {
         self.session.refresh_mcp_if_dirty().await;
+        if let Some(origin) = meta
+            .as_ref()
+            .and_then(|value| value.get("codex/panelOriginCallId"))
+        {
+            anyhow::ensure!(
+                server == codex_mcp::CODEX_APPS_MCP_SERVER_NAME && environment_id.is_none(),
+                "invalid hosted app target"
+            );
+            let origin = origin
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("invalid app origin"))?;
+            return self
+                .session
+                .services
+                .mcp_runtime
+                .call_tool_for_origin(self.session.thread_id, origin, tool, arguments)
+                .await;
+        }
         self.session
             .services
             .mcp_runtime
             .latest_call_tool_without_attribution(server, environment_id, tool, arguments, meta)
             .await
+    }
+
+    pub fn observer_prefix(&self) -> Option<crate::ObserverPrefix> {
+        self.session.services.model_client.observer_prefix()
     }
 
     pub fn enabled(&self, feature: Feature) -> bool {

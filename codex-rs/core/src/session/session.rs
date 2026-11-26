@@ -954,6 +954,7 @@ impl Session {
                 ));
             }
         };
+        let inherited_prefix = thread_extension_init.remove::<crate::client::ObserverPrefix>();
         let required_cyber_access_programs =
             thread_extension_init.get::<crate::cyber_access_program::RequiredCyberAccessPrograms>();
         let inherited_session_id = thread_extension_init
@@ -1892,6 +1893,10 @@ impl Session {
                 config.http_client_factory(),
                 workspace_routing.as_ref().clone(),
                 extensions.model_request_contributors().to_vec(),
+            )
+            .with_observer_prefix(
+                !config.ephemeral && std::env::var_os("CODEX_TURN_OBSERVER").is_some(),
+                inherited_prefix,
             )
             .with_budget_policy(budget_policy.clone())
             .with_executed_tool_calls(executed_tool_calls.clone())

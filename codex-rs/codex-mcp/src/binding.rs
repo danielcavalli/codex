@@ -109,6 +109,29 @@ impl McpBinding {
             .cloned()
     }
 
+    pub(crate) fn prepare_app_call(
+        &self,
+        server: &McpServerKey,
+        tool: &str,
+    ) -> Option<&PreparedMcpCall> {
+        let call = self.calls.get(&(server.clone(), tool.to_owned()))?;
+        let visibility = call
+            .tool_info()
+            .tool
+            .meta
+            .as_deref()
+            .and_then(|meta| meta.get("ui"))
+            .and_then(|ui| ui.get("visibility"));
+        if visibility.is_some_and(|value| {
+            !value
+                .as_array()
+                .is_some_and(|entries| entries.iter().any(|v| v.as_str() == Some("app")))
+        }) {
+            return None;
+        }
+        Some(call)
+    }
+
     pub fn has_servers(&self) -> bool {
         self.connections.has_servers()
     }
