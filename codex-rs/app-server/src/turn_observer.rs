@@ -216,6 +216,12 @@ async fn observe(
         result = timeout(CALLBACK_TIMEOUT, prepare) => result??,
     };
     let Some(prompt) = question.filter(|q| !q.trim().is_empty()) else {
+        // EOF acknowledges the skip. Allow the callback to close its store normally.
+        drop(stdin);
+        tokio::select! {
+            _ = turn.cancel.cancelled() => {},
+            result = timeout(CALLBACK_TIMEOUT, child.wait()) => { result??; },
+        }
         return Ok(());
     };
     if !budget

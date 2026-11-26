@@ -49,6 +49,7 @@ class Wire:
 class Screen:
     def __init__(self, screen):
         self.screen = screen
+        curses.set_escdelay(50)
         screen.keypad(True)
         screen.nodelay(True)
 
@@ -158,7 +159,31 @@ class Panel:
         origin = self.item["id"][:10] if self.item else "entrypoint"
         return f"{self.target['server']} / {self.tool} · {mode} · {origin}"
 
+    async def current_tools(self, wire):
+        rows = await inventory(
+            wire,
+            serverName=self.target["server"],
+            environmentId=self.target["environmentId"],
+        )
+        matches = [
+            row
+            for row in rows
+            if row["name"] == self.target["server"]
+            and row.get("environmentId") == self.target["environmentId"]
+        ]
+        if (
+            len(matches) != 1
+            or tuple(
+                matches[0].get(k) for k in ("pluginId", "httpOrigin", "serverInfo")
+            )
+            != self.identity
+        ):
+            raise ValueError("Panel registration changed")
+        return matches[0]["tools"]
+
     async def read(self, wire):
+        if self.tool not in await self.current_tools(wire):
+            raise ValueError("Originating tool is unavailable")
         params = dict(self.target, uri=self.uri)
         if self.item:
             params["originCallId"] = self.item["id"]
@@ -187,26 +212,7 @@ class Panel:
             routing["_meta"] = {"codex/panelOriginCallId": self.item["id"]}
         if not isinstance(name, str) or not isinstance(args, dict):
             raise ValueError("Invalid tool request")
-        rows = await inventory(
-            wire,
-            serverName=self.target["server"],
-            environmentId=self.target["environmentId"],
-        )
-        matches = [
-            row
-            for row in rows
-            if row["name"] == self.target["server"]
-            and row.get("environmentId") == self.target["environmentId"]
-        ]
-        if (
-            len(matches) != 1
-            or tuple(
-                matches[0].get(k) for k in ("pluginId", "httpOrigin", "serverInfo")
-            )
-            != self.identity
-        ):
-            raise ValueError("Panel registration changed")
-        tool = matches[0]["tools"].get(name)
+        tool = (await self.current_tools(wire)).get(name)
         if not tool or "app" not in ((tool.get("_meta") or {}).get("ui") or {}).get(
             "visibility", ["model", "app"]
         ):
@@ -265,7 +271,7 @@ async def discover(wire, html_enabled):
                 ):
                     continue
                 row = by_key.get((item["server"], item.get("environmentId")))
-                if row is None:
+                if row is None or item.get("pluginId") != row.get("pluginId"):
                     continue
                 tool = (row.get("tools") or {}).get(item["tool"])
                 if tool is None:
