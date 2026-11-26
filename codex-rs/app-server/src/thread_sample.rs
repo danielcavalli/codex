@@ -193,7 +193,11 @@ impl SampleTask {
             .await;
         options.config.ephemeral = true;
         if observer {
-            options.config.features.disable(Feature::CodexHooks);
+            options
+                .config
+                .features
+                .disable(Feature::CodexHooks)
+                .map_err(|error| invalid_request(error.to_string()))?;
             options.config.notify = None;
             options
                 .thread_extension_init

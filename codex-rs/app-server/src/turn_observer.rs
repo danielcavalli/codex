@@ -79,7 +79,7 @@ impl ThreadLifecycleContributor<Config> for TurnObserver {
             if !input.config.ephemeral
                 && matches!(
                     input.session_source,
-                    SessionSource::Cli | SessionSource::Exec
+                    SessionSource::Cli | SessionSource::VSCode | SessionSource::Exec
                 )
             {
                 input.thread_store.insert(Enabled);
