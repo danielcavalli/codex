@@ -5,6 +5,7 @@ import base64
 import curses
 import json
 import os
+import secrets
 import sys
 import textwrap
 import unicodedata
@@ -227,7 +228,18 @@ class Panel:
 
 
 async def discover(wire, html_enabled):
-    rows = await inventory(wire)
+    registrations = await inventory(wire)
+    rows = []
+    for registration in registrations:
+        # Unscoped discovery may consult a global catalog without this client's
+        # negotiated extensions. Read each tool inventory from its live thread.
+        rows.extend(
+            await inventory(
+                wire,
+                serverName=registration["name"],
+                environmentId=registration.get("environmentId"),
+            )
+        )
     panels = []
     by_key = {(row["name"], row.get("environmentId")): row for row in rows}
     for row in rows:
@@ -323,7 +335,9 @@ async def native(panel, wire, screen, data):
 # The trusted document and sandbox proxy have separate virtual HTTPS origins.
 # The view itself has an opaque origin. Only the trusted document can invoke the broker.
 HOST_PAGE = """<!doctype html><meta charset=utf-8><body><script>
+document.body.style.margin = "0";
 const proxy = document.createElement('iframe');
+proxy.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
 proxy.sandbox = 'allow-scripts allow-same-origin';
 proxy.src = 'https://codex-sandbox.invalid/';
 window.deliver = msg => proxy.contentWindow.postMessage(msg,'https://codex-sandbox.invalid');
@@ -336,6 +350,7 @@ document.body.append(proxy);
 </script>"""
 PROXY_PAGE = """<!doctype html><meta charset=utf-8><body><script>
 const app = document.createElement('iframe');
+app.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
 app.sandbox = 'allow-scripts';
 const host = 'https://codex-panel.invalid';
 window.addEventListener('message', e => {
@@ -350,6 +365,51 @@ window.addEventListener('message', e => {
 });
 parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/sandbox-proxy-ready'},host);
 </script>"""
+
+
+def app_result(result):
+    # The app-server's historical item serializes absent _meta as null.
+    # MCP Apps accepts an omitted property or an object.
+    return {
+        k: result[k]
+        for k in ("content", "structuredContent", "isError", "_meta")
+        if result.get(k) is not None
+    }
+
+
+class GraphicViewport:
+    """Transmit only Chromium-generated PNGs. Keep controls and text outside the image."""
+
+    def __init__(self):
+        self.image_id = secrets.randbelow(2**31 - 1) + 1
+        self.previous = None
+
+    def clear(self):
+        if self.previous is not None:
+            sys.stdout.write(f"\x1b_Ga=d,d=I,i={self.image_id},q=2;\x1b\\")
+            sys.stdout.flush()
+            self.previous = None
+
+    def draw(self, png, columns, rows):
+        if self.previous == (png, columns, rows):
+            return
+        self.clear()
+        self.previous = (png, columns, rows)
+        data = base64.b64encode(png)
+        out = sys.stdout.buffer
+        out.write(b"\x1b7\x1b[2;1H")
+        for i in range(0, len(data), 4096):
+            header = (
+                f"a=T,f=100,i={self.image_id},c={columns},r={rows},C=1,q=2,"
+                if i == 0
+                else ""
+            )
+            more = int(i + 4096 < len(data))
+            out.write(
+                f"\x1b_G{header}m={more};".encode() + data[i : i + 4096] + b"\x1b\\"
+            )
+        out.write(b"\x1b8")
+        out.flush()
 
 
 class WebPanel:
@@ -413,7 +473,10 @@ class WebPanel:
             )
             if item.get("result"):
                 await self.send(
-                    dict(method="ui/notifications/tool-result", params=item["result"])
+                    dict(
+                        method="ui/notifications/tool-result",
+                        params=app_result(item["result"]),
+                    )
                 )
         elif (
             self.initialized
@@ -448,7 +511,8 @@ class WebPanel:
             if url == HOST + "/":
                 html = HOST_PAGE
                 csp = (
-                    "default-src 'none'; script-src 'unsafe-inline'; frame-src " + PROXY
+                    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src "
+                    + PROXY
                 )
             elif url == PROXY + "/":
                 html = PROXY_PAGE
@@ -489,15 +553,22 @@ class WebPanel:
             result = await self.panel.call(
                 self.wire, screen, params.get("name"), params.get("arguments", {})
             )
-            await self.send(dict(id=rid, result=result))
+            await self.send(dict(id=rid, result=app_result(result)))
         except ValueError as error:
             await self.send(dict(id=rid, error={"code": -32000, "message": str(error)}))
 
     async def run(self, screen):
+        supported = not os.environ.get("TMUX") and (
+            os.environ.get("TERM") in ("xterm-kitty", "xterm-ghostty")
+            or os.environ.get("KITTY_WINDOW_ID")
+        )
+        graphics = False
+        self.viewport = GraphicViewport()
         offset = 0
         size = None
         while True:
             if not self.actions.empty():
+                self.viewport.clear()
                 await self.action(screen)
             h, w = screen.screen.getmaxyx()
             if size != (w, h):
@@ -505,24 +576,45 @@ class WebPanel:
                 await self.page.set_viewport_size(
                     {"width": max(180, w * 8), "height": max(100, h * 16)}
                 )
-            tree = await self.frame.locator("body").aria_snapshot(timeout=2000)
-            lines = [
-                line
-                for s in tree.splitlines()
-                for line in textwrap.wrap(s, width=max(10, w - 2))
-            ]
-            screen.draw(
-                self.panel.tool,
-                lines,
-                "Tab  Focus    Enter  Activate    PgUp/PgDn  Scroll    Esc  Close",
-                offset,
-            )
+            if graphics and h >= 3 and w >= 2:
+                screen.draw(
+                    self.panel.tool, [], "Click  Activate    F2  Text    Esc  Close"
+                )
+                self.viewport.draw(await self.page.screenshot(), w, h - 2)
+                lines = []
+            else:
+                tree = await self.frame.locator("body").aria_snapshot(timeout=2000)
+                lines = [
+                    line
+                    for s in tree.splitlines()
+                    for line in textwrap.wrap(s, width=max(10, w - 2))
+                ]
+                footer = (
+                    "Tab  Focus    Enter  Activate    PgUp/PgDn  Scroll    Esc  Close"
+                )
+                if supported:
+                    footer += "    F2  Graphics"
+                screen.draw(self.panel.tool, lines, footer, offset)
             try:
                 key = await asyncio.wait_for(screen.key(), 0.25)
             except TimeoutError:
                 continue
             if key == "\x1b":
                 return
+            if supported and key == curses.KEY_F2:
+                graphics = not graphics
+                self.viewport.clear()
+                curses.mousemask(curses.BUTTON1_CLICKED if graphics else 0)
+                continue
+            if graphics and key == curses.KEY_MOUSE:
+                _, x, y, _, buttons = curses.getmouse()
+                if buttons & curses.BUTTON1_CLICKED and 0 <= x < w and 1 <= y < h - 1:
+                    viewport = self.page.viewport_size
+                    await self.page.mouse.click(
+                        (x + 0.5) * viewport["width"] / w,
+                        (y - 0.5) * viewport["height"] / (h - 2),
+                    )
+                continue
             if key in (curses.KEY_NPAGE, curses.KEY_PPAGE):
                 offset = max(
                     0,
@@ -551,6 +643,9 @@ class WebPanel:
                 await self.page.keyboard.insert_text(key)
 
     async def close(self):
+        if hasattr(self, "viewport"):
+            self.viewport.clear()
+            curses.mousemask(0)
         try:
             if self.initialized:
                 await self.send(

@@ -300,7 +300,7 @@ impl ResourceOrigin {
         thread_id: ThreadId,
         tool: &str,
         arguments: Option<serde_json::Value>,
-    ) -> anyhow::Result<rmcp::model::CallToolResult> {
+    ) -> anyhow::Result<codex_protocol::mcp::CallToolResult> {
         self.validate_tool(binding, &self.tool)?;
         self.validate_tool(binding, tool)?;
         let key = McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME);

@@ -72,7 +72,14 @@ pub(crate) async fn open(client: AppServerRequestHandle, thread: ThreadId) -> Re
         .await
         {
             Ok(Ok(value)) => json!({"result":value}),
-            Ok(Err(_)) => json!({"error":"The app-server declined the request."}),
+            Ok(Err(codex_app_server_client::TypedRequestError::Server { source, .. }))
+                if method == "thread/turns/list"
+                    && source.code == -32600
+                    && source.message.contains("not materialized yet") =>
+            {
+                json!({"result":{"data":[],"nextCursor":null}})
+            }
+            Ok(Err(error)) => json!({"error":error.to_string()}),
             Err(_) => json!({"error":"The request timed out."}),
         };
         input.write_all(format!("{reply}\n").as_bytes()).await?;

@@ -12,10 +12,11 @@ use codex_extension_api::{
 use codex_protocol::{ThreadId, protocol::SessionSource};
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Semaphore;
@@ -30,6 +31,39 @@ pub(crate) struct TurnObserver {
     manager: Weak<ThreadManager>,
     samples: Arc<SampleResponseRegistry>,
     slots: Arc<Semaphore>,
+    budget: Arc<Mutex<Budget>>,
+}
+
+/// Admission is charged before the fork, including requests lost to cancellation.
+#[derive(Default)]
+struct Budget {
+    attempts: VecDeque<Instant>,
+    cold: u8,
+    pause_until: Option<Instant>,
+}
+
+impl Budget {
+    fn admit(&mut self, now: Instant) -> bool {
+        self.attempts
+            .retain(|time| now.duration_since(*time) < Duration::from_secs(3600));
+        if self.attempts.len() >= 12 || self.pause_until.is_some_and(|end| now < end) {
+            return false;
+        }
+        self.attempts.push_back(now);
+        true
+    }
+
+    fn observe_cache(&mut self, cached: Option<i64>) {
+        if cached.is_some_and(|tokens| tokens > 0) {
+            self.cold = 0;
+        } else {
+            self.cold += 1;
+            if self.cold >= 2 {
+                self.pause_until = Some(Instant::now() + Duration::from_secs(600));
+                self.cold = 0;
+            }
+        }
+    }
 }
 
 struct Enabled;
@@ -60,6 +94,7 @@ impl TurnObserver {
             manager,
             samples,
             slots: Arc::new(Semaphore::new(1)),
+            budget: Default::default(),
         }))
     }
 
@@ -106,11 +141,12 @@ impl ThreadLifecycleContributor<Config> for TurnObserver {
             };
             let path = self.executable.clone();
             let samples = self.samples.clone();
+            let budget = self.budget.clone();
             // A new turn or teardown cancels this token even after admission.
             let originator = codex_otel::auth_storage::AuthStorageOriginator::current();
             tokio::spawn(originator.scope(async move {
                 let _permit = permit;
-                if let Err(error) = observe(path, manager, samples, thread, &turn).await {
+                if let Err(error) = observe(path, manager, samples, budget, thread, &turn).await {
                     tracing::debug!(%error, "private turn observation stopped");
                 }
             }));
@@ -145,6 +181,7 @@ async fn observe(
     path: PathBuf,
     manager: Arc<ThreadManager>,
     samples: Arc<SampleResponseRegistry>,
+    budget: Arc<Mutex<Budget>>,
     thread: ThreadId,
     turn: &PendingTurn,
 ) -> Result<()> {
@@ -181,6 +218,13 @@ async fn observe(
     let Some(prompt) = question.filter(|q| !q.trim().is_empty()) else {
         return Ok(());
     };
+    if !budget
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .admit(Instant::now())
+    {
+        return Ok(());
+    }
     let task = SampleTask {
         store: manager.thread_store(),
         manager,
@@ -199,7 +243,13 @@ async fn observe(
     // This await owns the entire fork, including cancellation and shutdown.
     let result = task.run_observer().await;
     let reply = match result {
-        Ok(sample) => json!({"type":"sample","sample":sample}),
+        Ok(sample) => {
+            budget
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .observe_cache(sample.cached_input_tokens);
+            json!({"type":"sample","sample":sample})
+        }
         Err(_) => json!({"type":"skipped"}),
     };
     tokio::select! {
