@@ -249,6 +249,7 @@ impl HousekeeperSampler {
             model: self.model.slug.clone(),
             input,
             tools: None,
+            max_output_tokens: None,
             tool_choice: "none".to_owned(),
             parallel_tool_calls: false,
             reasoning: Some(Reasoning {

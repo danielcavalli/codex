@@ -141,6 +141,7 @@ async fn connector_results_reach_websocket_without_payload_logs() -> Result<()> 
         input: &input,
         tool_results: vec![(0, 0, Arc::new(body))],
         tools: None,
+        max_output_tokens: None,
         tool_choice: "auto",
         parallel_tool_calls: false,
         reasoning: None,

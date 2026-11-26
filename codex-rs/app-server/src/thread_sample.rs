@@ -93,7 +93,7 @@ pub(crate) async fn generate_sample(
     tasks.spawn(async move {
         rpc_gate
             .run(originator.scope(async move {
-                let result = Box::pin(task.run(deadline)).await;
+                let result = Box::pin(task.run(deadline, false)).await;
                 let _ = sender.send(result);
             }))
             .await;
@@ -105,7 +105,11 @@ pub(crate) async fn generate_sample(
 }
 
 impl SampleTask {
-    async fn run(self, deadline: Instant) -> SampleResult {
+    pub(crate) async fn run_observer(self) -> SampleResult {
+        self.run(Instant::now() + SAMPLE_TIMEOUT, true).await
+    }
+
+    async fn run(self, deadline: Instant, observer: bool) -> SampleResult {
         let Self {
             manager,
             store,
@@ -188,6 +192,18 @@ impl SampleTask {
             )
             .await;
         options.config.ephemeral = true;
+        if observer {
+            options.config.features.disable(Feature::CodexHooks);
+            options.config.notify = None;
+            options
+                .thread_extension_init
+                .insert(codex_core::McpServersDisabled);
+            options
+                .config
+                .features
+                .enable(Feature::PredictionPreserveParentTools)
+                .map_err(|error| invalid_request(error.to_string()))?;
+        }
         if params.allow_in_progress_turn {
             // Mid-turn copy receives a custom interruption marker THREAD_SNAPSHOT_NOTE
             // instead of default interrupt message
@@ -222,7 +238,14 @@ impl SampleTask {
         let effort = params.effort.filter(|_| {
             model.supports_reasoning_effort_updates && options.config.model_provider.is_openai()
         });
-        options.session_source = Some(SessionSource::Custom("thread_sample".to_string()));
+        options.session_source = Some(SessionSource::Custom(
+            if observer {
+                "turn_observer"
+            } else {
+                "thread_sample"
+            }
+            .to_string(),
+        ));
         options.thread_source = Some(
             params
                 .thread_source

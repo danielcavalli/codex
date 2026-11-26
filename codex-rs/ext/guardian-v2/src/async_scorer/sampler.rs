@@ -231,6 +231,7 @@ impl LunaSampler {
             model: MODEL.to_owned(),
             input,
             tools: None,
+            max_output_tokens: None,
             tool_choice: "none".to_owned(),
             parallel_tool_calls: false,
             reasoning: Some(Reasoning {

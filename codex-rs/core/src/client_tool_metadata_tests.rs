@@ -47,6 +47,7 @@ fn request_with_metadata_and_source(
         model: "test".to_string(),
         input: vec![output],
         tools: None,
+        max_output_tokens: None,
         tool_choice: "auto".to_string(),
         parallel_tool_calls: true,
         reasoning: None,

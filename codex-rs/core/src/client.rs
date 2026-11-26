@@ -493,6 +493,7 @@ fn responses_request_properties_mismatch(
         model: previous_model,
         input: _,
         tools: previous_tools,
+        max_output_tokens: previous_max_output_tokens,
         tool_choice: previous_tool_choice,
         parallel_tool_calls: previous_parallel_tool_calls,
         reasoning: previous_reasoning,
@@ -512,6 +513,7 @@ fn responses_request_properties_mismatch(
         model: current_model,
         input: _,
         tools: current_tools,
+        max_output_tokens: current_max_output_tokens,
         tool_choice: current_tool_choice,
         parallel_tool_calls: current_parallel_tool_calls,
         reasoning: current_reasoning,
@@ -532,6 +534,8 @@ fn responses_request_properties_mismatch(
     // referenced by `previous_response_id`.
     let reason = if previous_model != current_model {
         "model_changed"
+    } else if previous_max_output_tokens != current_max_output_tokens {
+        "max_output_tokens_changed"
     } else if previous_tools != current_tools {
         "tools_changed"
     } else if previous_tool_choice != current_tool_choice {
@@ -1374,11 +1378,13 @@ impl ModelClient {
             }
         }
         let client_metadata = responses_metadata.client_metadata(include_internal);
+        let observer = matches!(&self.state.session_source, SessionSource::Custom(name) if name == "turn_observer");
         let request = ResponsesApiRequest {
             model: model_info.slug.clone(),
             input,
             tools,
-            tool_choice: "auto".to_string(),
+            max_output_tokens: observer.then_some(1024),
+            tool_choice: if observer { "none" } else { "auto" }.to_string(),
             parallel_tool_calls: prompt.parallel_tool_calls && !model_info.use_responses_lite,
             reasoning: Some(reasoning),
             store: false,

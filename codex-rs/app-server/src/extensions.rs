@@ -70,6 +70,13 @@ pub(crate) fn thread_extensions(
         turn_start_admission,
     } = dependencies;
     let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(Arc::clone(&event_sink));
+    if let Some(observer) = crate::turn_observer::TurnObserver::configured(
+        thread_manager.clone(),
+        sample_responses.clone(),
+    ) {
+        builder.thread_lifecycle_contributor(observer.clone());
+        builder.turn_lifecycle_contributor(observer);
+    }
     if config
         .features
         .enabled(codex_features::Feature::MultiEnvCopyFile)

@@ -154,6 +154,7 @@ mod thread_status;
 mod transport;
 mod turn_admission;
 mod turn_cost_worker;
+mod turn_observer;
 mod user_verification;
 mod user_verification_response;
 

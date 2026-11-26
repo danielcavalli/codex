@@ -415,6 +415,8 @@ pub struct ResponsesApiRequest {
     pub input: Vec<ResponseItem>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<ResponsesApiTools>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
     pub tool_choice: String,
     pub parallel_tool_calls: bool,
     pub reasoning: Option<Reasoning>,
@@ -444,6 +446,7 @@ impl<'a> From<&'a ResponsesApiRequest> for ResponseCreateWsRequest<'a> {
             input: &request.input,
             tool_results: Vec::new(),
             tools: request.tools.as_ref().map(ResponsesApiTools::as_raw_value),
+            max_output_tokens: request.max_output_tokens,
             tool_choice: &request.tool_choice,
             parallel_tool_calls: request.parallel_tool_calls,
             reasoning: request.reasoning.as_ref(),
@@ -479,6 +482,8 @@ pub struct ResponseCreateWsRequest<'a> {
     pub tool_results: Vec<(usize, usize, Arc<ToolResultBody>)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<&'a RawValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
     pub tool_choice: &'a str,
     pub parallel_tool_calls: bool,
     pub reasoning: Option<&'a Reasoning>,
