@@ -485,7 +485,13 @@ impl App {
                 }
             }
             AppEvent::OpenMcpPanel => {
-                if let Some(thread) = self.current_displayed_thread_id()
+                // The panel takes the terminal until it closes; a running turn would keep sending
+                // events nobody draws or answers meanwhile.
+                if self.chat_widget.is_task_running() {
+                    self.chat_widget.add_error_message(
+                        "Wait for the turn to finish before opening an MCP panel.".to_string(),
+                    );
+                } else if let Some(thread) = self.current_displayed_thread_id()
                     && self.displayed_conversation_backend_id() == Some(app_server.backend_id())
                 {
                     let client = app_server.request_handle();

@@ -1816,6 +1816,11 @@ impl ChatWidget {
         self.bottom_pane.composer_is_vim_enabled()
     }
 
+    /// Whether a turn is running, so a terminal handoff can wait until it settles.
+    pub(crate) fn is_task_running(&self) -> bool {
+        self.bottom_pane.is_task_running()
+    }
+
     #[cfg(test)]
     pub(crate) fn is_task_running_for_test(&self) -> bool {
         self.bottom_pane.is_task_running()

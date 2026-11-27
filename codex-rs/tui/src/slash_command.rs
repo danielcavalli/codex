@@ -330,6 +330,8 @@ impl SlashCommand {
             SlashCommand::App => cfg!(any(target_os = "macos", target_os = "windows")),
             SlashCommand::Voice => true,
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
+            // Listed only where a panel host is configured; without one it can only fail.
+            SlashCommand::Panel => std::env::var_os("CODEX_PANEL_PYTHON").is_some(),
             _ => true,
         }
     }
