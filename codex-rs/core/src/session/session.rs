@@ -1895,7 +1895,15 @@ impl Session {
                 extensions.model_request_contributors().to_vec(),
             )
             .with_observer_prefix(
-                !config.ephemeral && std::env::var_os("CODEX_TURN_OBSERVER").is_some(),
+                // Capture only where the app-server's observer can run: a root thread, and an
+                // observer it accepts (an absolute path).
+                !config.ephemeral
+                    && matches!(
+                        session_configuration.session_source,
+                        SessionSource::Cli | SessionSource::VSCode | SessionSource::Exec
+                    )
+                    && std::env::var_os("CODEX_TURN_OBSERVER")
+                        .is_some_and(|path| std::path::Path::new(&path).is_absolute()),
                 inherited_prefix,
             )
             .with_budget_policy(budget_policy.clone())

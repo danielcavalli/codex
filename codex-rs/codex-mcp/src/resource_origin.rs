@@ -246,7 +246,13 @@ impl ResourceOrigin {
             + self.uri.len()
     }
 
-    fn validate_tool(&self, binding: &McpBinding, tool: &str) -> anyhow::Result<()> {
+    /// `link_id` reaches the app policy only for panel calls; reads keep upstream's `None`.
+    fn validate_tool(
+        &self,
+        binding: &McpBinding,
+        tool: &str,
+        link_id: Option<&str>,
+    ) -> anyhow::Result<()> {
         if self.ambiguous_account {
             anyhow::bail!("originating MCP tool call has ambiguous account selection");
         }
@@ -279,7 +285,7 @@ impl ResourceOrigin {
         if !AppToolPolicyEvaluator::new(&binding.config().config_layer_stack)
             .policy(AppToolPolicyInput {
                 connector_id: Some(&self.connector_id),
-                link_id: self.link_id.as_deref(),
+                link_id,
                 tool_name: tool_info.tool.name.as_ref(),
                 tool_title: tool_info.tool.title.as_deref(),
                 destructive_hint: annotations.and_then(|value| value.destructive_hint),
@@ -301,8 +307,8 @@ impl ResourceOrigin {
         tool: &str,
         arguments: Option<serde_json::Value>,
     ) -> anyhow::Result<codex_protocol::mcp::CallToolResult> {
-        self.validate_tool(binding, &self.tool)?;
-        self.validate_tool(binding, tool)?;
+        self.validate_tool(binding, &self.tool, self.link_id.as_deref())?;
+        self.validate_tool(binding, tool, self.link_id.as_deref())?;
         let key = McpServerKey::unscoped(CODEX_APPS_MCP_SERVER_NAME);
         let call = binding
             .prepare_app_call(&key, tool)
@@ -344,7 +350,7 @@ impl ResourceOrigin {
         if self.uri != params.uri {
             anyhow::bail!("originating MCP tool call does not match the requested resource");
         }
-        self.validate_tool(binding, &self.tool)?;
+        self.validate_tool(binding, &self.tool, None)?;
         let meta = params.meta.get_or_insert_default();
         meta.insert("threadId".into(), serde_json::json!(thread_id));
         meta.insert(

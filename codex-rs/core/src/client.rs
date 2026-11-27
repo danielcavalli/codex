@@ -185,6 +185,8 @@ const RESPONSES_WEBSOCKETS_V2_BETA_HEADER_VALUE: &str = "responses_websockets=20
 const X_OPENAI_INTERNAL_CODEX_RESPONSES_LITE_HEADER: &str =
     "x-openai-internal-codex-responses-lite";
 const REALTIME_CALLS_ENDPOINT: &str = "/realtime/calls";
+/// Output cap of a private observer answer (reasoning included; observers ask at low effort).
+const OBSERVER_MAX_OUTPUT_TOKENS: u32 = 2048;
 const MEMORIES_SUMMARIZE_ENDPOINT: &str = "/memories/trace_summarize";
 #[cfg(test)]
 pub(crate) const WEBSOCKET_CONNECT_TIMEOUT: Duration =
@@ -1445,25 +1447,32 @@ impl ModelClient {
             }
         }
         if let Some(capture) = &self.observed_prefix {
-            let snapshot = ObserverPrefix {
-                model: model_info.slug.clone(),
-                header: input[..header_len].to_vec(),
-                tools: tools.clone(),
-                parallel_tool_calls,
-                item_count: input.len(),
-                digest: ObserverPrefix::digest(&input)?,
-            };
-            *capture
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(snapshot);
+            // Bookkeeping for a later private question never fails the foreground request.
+            match ObserverPrefix::digest(&input) {
+                Ok(digest) => {
+                    let snapshot = ObserverPrefix {
+                        model: model_info.slug.clone(),
+                        header: input[..header_len].to_vec(),
+                        tools: tools.clone(),
+                        parallel_tool_calls,
+                        item_count: input.len(),
+                        digest,
+                    };
+                    *capture
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(snapshot);
+                }
+                Err(error) => tracing::warn!(%error, "observer prefix not captured"),
+            }
         }
         let client_metadata = responses_metadata.client_metadata(include_internal);
-        let observer = matches!(&self.state.session_source, SessionSource::Custom(name) if name == "turn_observer");
+        // A private observer request is the one built on an inherited parent prefix.
+        let observer = self.inherited_prefix.is_some();
         let request = ResponsesApiRequest {
             model: model_info.slug.clone(),
             input,
             tools,
-            max_output_tokens: observer.then_some(1024),
+            max_output_tokens: observer.then_some(OBSERVER_MAX_OUTPUT_TOKENS),
             tool_choice: if observer { "none" } else { "auto" }.to_string(),
             parallel_tool_calls,
             reasoning: Some(reasoning),

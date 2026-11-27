@@ -258,7 +258,10 @@ impl SampleTask {
             params
                 .thread_source
                 .map(Into::into)
-                .unwrap_or_else(|| ThreadSource::Feature("thread_sample".to_string())),
+                .unwrap_or_else(|| {
+                    let feature = if observer { "turn_observer" } else { "thread_sample" };
+                    ThreadSource::Feature(feature.to_string())
+                }),
         );
         options.parent_trace = trace.clone();
         if cancellation.is_cancelled() {

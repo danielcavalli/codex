@@ -65,12 +65,11 @@ pub(crate) async fn open(client: AppServerRequestHandle, thread: ThreadId) -> Re
         let request: ClientRequest = serde_json::from_value(json!({
             "method": method, "id": Uuid::new_v4().to_string(), "params": params
         }))?;
-        let reply = match timeout(
-            Duration::from_secs(10),
-            client.request_typed::<Value>(request),
-        )
-        .await
-        {
+        // A tool call may legitimately run long, and timing out does not stop it on its server;
+        // reads answer quickly or not at all.
+        let calls_tool = method == "mcpServer/tool/call";
+        let limit = Duration::from_secs(if calls_tool { 600 } else { 10 });
+        let reply = match timeout(limit, client.request_typed::<Value>(request)).await {
             Ok(Ok(value)) => json!({"result":value}),
             Ok(Err(codex_app_server_client::TypedRequestError::Server { source, .. }))
                 if method == "thread/turns/list"
@@ -80,6 +79,9 @@ pub(crate) async fn open(client: AppServerRequestHandle, thread: ThreadId) -> Re
                 json!({"result":{"data":[],"nextCursor":null}})
             }
             Ok(Err(error)) => json!({"error":error.to_string()}),
+            Err(_) if calls_tool => json!({"error":
+                "No result after 10 minutes. The tool may still be running on its server; running \
+                 it again may repeat its effects."}),
             Err(_) => json!({"error":"The request timed out."}),
         };
         input.write_all(format!("{reply}\n").as_bytes()).await?;

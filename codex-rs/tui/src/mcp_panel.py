@@ -99,6 +99,38 @@ class Screen:
             if key in ("k", curses.KEY_UP):
                 selected = max(0, selected - 1)
 
+    async def confirm(self, title, lines):
+        """Ask before a tool call: every line is shown (scrolling), keys typed before the
+        question are discarded, and only Enter, once the last line has been seen, runs it."""
+
+        curses.flushinp()
+        offset, seen_end = 0, False
+        while True:
+            h, _ = self.screen.getmaxyx()
+            room = max(1, h - 3)
+            last = max(0, len(lines) - room)
+            offset = min(max(0, offset), last)
+            seen_end = seen_end or offset >= last
+            footer = (
+                "Enter  Run     Esc  Cancel     ↑ ↓  Scroll"
+                if seen_end
+                else "↓ PgDn  Read to the end to run     Esc  Cancel"
+            )
+            self.draw(title, lines, footer, offset)
+            key = await self.key()
+            if key in ("\x1b", "q"):
+                return False
+            if seen_end and key in ("\n", "\r", curses.KEY_ENTER):
+                return True
+            if key in ("j", curses.KEY_DOWN):
+                offset += 1
+            elif key in ("k", curses.KEY_UP):
+                offset -= 1
+            elif key == curses.KEY_NPAGE:
+                offset += room
+            elif key == curses.KEY_PPAGE:
+                offset -= room
+
     async def edit(self, label, value):
         while True:
             self.draw(label, [value], "Type to edit     Enter  Save     Esc  Cancel")
@@ -217,16 +249,14 @@ class Panel:
             "visibility", ["model", "app"]
         ):
             raise ValueError("Tool unavailable to this app")
-        title = f"{self.target['server']} / {name}"
-        screen.draw(
-            title,
-            textwrap.wrap(
-                safe(json.dumps(args, ensure_ascii=False)),
-                max(12, screen.screen.getmaxyx()[1] - 2),
-            ),
-            "Run this tool?  y  Run     any other key  Cancel",
-        )
-        if await screen.key() != "y":
+        title = f"Run {self.target['server']} / {name}?"
+        width = max(12, screen.screen.getmaxyx()[1] - 2)
+        lines = [
+            wrapped
+            for raw in safe(json.dumps(args, ensure_ascii=False, indent=2)).splitlines()
+            for wrapped in (textwrap.wrap(raw, width, drop_whitespace=False) or [""])
+        ]
+        if not await screen.confirm(title, lines):
             raise ValueError("Action cancelled")
         return await wire.rpc(
             "mcpServer/tool/call", **self.target, tool=name, arguments=args, **routing
@@ -504,7 +534,14 @@ class WebPanel:
 
     async def start(self, playwright):
         self.browser = await playwright.chromium.launch(
-            executable_path=os.environ["CODEX_PANEL_CHROMIUM"], chromium_sandbox=True
+            executable_path=os.environ["CODEX_PANEL_CHROMIUM"],
+            chromium_sandbox=True,
+            # CSP and the deny-all route do not cover WebRTC: with no proxy, this leaves it no
+            # UDP path, so a panel cannot reach a STUN/TURN host with what the user types.
+            args=[
+                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+            ],
         )
         self.context = await self.browser.new_context(
             accept_downloads=False, service_workers="block"

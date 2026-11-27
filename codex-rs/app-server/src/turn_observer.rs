@@ -9,6 +9,7 @@ use codex_extension_api::{
     ExtensionFuture, ThreadIdleCause, ThreadIdleInput, ThreadLifecycleContributor,
     ThreadStartInput, ThreadStopInput, TurnLifecycleContributor, TurnStartInput,
 };
+use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::{ThreadId, protocol::SessionSource};
 use serde::Deserialize;
 use serde_json::json;
@@ -147,7 +148,7 @@ impl ThreadLifecycleContributor<Config> for TurnObserver {
             tokio::spawn(originator.scope(async move {
                 let _permit = permit;
                 if let Err(error) = observe(path, manager, samples, budget, thread, &turn).await {
-                    tracing::debug!(%error, "private turn observation stopped");
+                    tracing::warn!(%error, "private turn observation stopped");
                 }
             }));
         })
@@ -177,6 +178,11 @@ impl TurnLifecycleContributor for TurnObserver {
     }
 }
 
+/// The completion record the observer reads first.
+fn offer(thread: ThreadId, turn: &str, cwd: &str) -> serde_json::Value {
+    json!({"type": "completed", "threadId": thread, "turnId": turn, "cwd": cwd})
+}
+
 async fn observe(
     path: PathBuf,
     manager: Arc<ThreadManager>,
@@ -189,6 +195,9 @@ async fn observe(
     if turn.cancel.is_cancelled() {
         return Ok(());
     }
+    // The observer starts in the temp directory; the thread's own directory travels in the offer
+    // so the observer can read its project's settings.
+    let cwd = parent.config_snapshot().await.cwd().display().to_string();
     let mut child = Command::new(path)
         .current_dir(std::env::temp_dir())
         .stdin(Stdio::piped())
@@ -198,7 +207,7 @@ async fn observe(
         .spawn()?;
     let mut stdin = child.stdin.take().context("missing callback stdin")?;
     let stdout = child.stdout.take().context("missing callback stdout")?;
-    let offer = json!({"type":"completed","threadId":thread,"turnId":turn.id});
+    let offer = offer(thread, &turn.id, &cwd);
     let prepare = async {
         stdin.write_all(format!("{offer}\n").as_bytes()).await?;
         let mut bytes = Vec::new();
@@ -240,6 +249,9 @@ async fn observe(
             thread_id: thread.to_string(),
             expected_turn_id: turn.id.clone(),
             prompt,
+            // Reasoning counts against the private answer's output cap; a side question needs
+            // little of it whatever the session runs at.
+            effort: Some(ReasoningEffort::Low),
             interrupt_on_cancel: Some(true),
             ..Default::default()
         },
@@ -266,5 +278,45 @@ async fn observe(
             ensure!(child.wait().await?.success(), "callback delivery failed");
             Ok(())
         }) => result?,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budget_admits_twelve_attempts_an_hour() {
+        let mut budget = Budget::default();
+        let start = Instant::now();
+        for minute in 0..12 {
+            assert!(budget.admit(start + Duration::from_secs(minute * 60)));
+        }
+        assert!(!budget.admit(start + Duration::from_secs(12 * 60)));
+        // The first attempt leaves the window an hour after it was made.
+        assert!(budget.admit(start + Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn two_cold_answers_pause_admission_and_a_warm_one_resets_the_count() {
+        let mut budget = Budget::default();
+        budget.observe_cache(Some(0));
+        budget.observe_cache(Some(17_536));
+        budget.observe_cache(None);
+        assert!(budget.pause_until.is_none(), "a warm answer between cold ones resets them");
+        budget.observe_cache(Some(0));
+        let paused = budget.pause_until.expect("two cold answers in a row pause");
+        assert!(!budget.admit(Instant::now()));
+        assert!(budget.admit(paused + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn the_offer_names_the_turn_and_the_threads_directory() {
+        let thread = ThreadId::new();
+        let record = offer(thread, "turn-1", "/home/dan/Work/dan-cli");
+        assert_eq!(record["type"], "completed");
+        assert_eq!(record["threadId"], json!(thread));
+        assert_eq!(record["turnId"], "turn-1");
+        assert_eq!(record["cwd"], "/home/dan/Work/dan-cli");
     }
 }
